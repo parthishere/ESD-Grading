@@ -72,6 +72,9 @@ def create_superuser_if_needed():
             email='admin@example.com',
             password='Admin@123'
         )
+        user.is_staff = True
+        user.is_superuser = True
+        user.save()
         # Create instructor role for superuser
         UserRole.objects.create(user=user, role='instructor')
         print(f"Superuser '{user.username}' created with password 'Admin@123'")
