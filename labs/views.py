@@ -17,7 +17,9 @@ def instructor_required(function):
     """Decorator to check if user is an instructor."""
     def wrap(request, *args, **kwargs):
         try:
-            if hasattr(request.user, 'role') and request.user.role.role == 'instructor':
+            print("heheheh")
+            print(request.user.groups)
+            if request.user.is_superuser:
                 return function(request, *args, **kwargs)
             else:
                 raise PermissionDenied("You must be an instructor to access this page.")

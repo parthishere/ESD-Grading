@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth.models import User, Group, Permission
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.contrib.contenttypes.models import ContentType
+from decimal import Decimal
 
 class UserRole(models.Model):
     """Model representing user roles in the system."""
@@ -56,7 +57,7 @@ class Lab(models.Model):
         
     def get_student_score(self, student):
         """Get a student's total score for this lab."""
-        total_score = 0
+        total_score = Decimal('0')
         
         # Get all parts for this lab
         parts = self.parts.all()
@@ -67,7 +68,7 @@ class Lab(models.Model):
             part_contribution = part.get_contribution_to_lab()
             
             # Get the student's percentage score for this part
-            part_percentage = part.get_student_percentage(student) / 100
+            part_percentage = Decimal(str(part.get_student_percentage(student))) / Decimal('100')
             
             # Add the weighted score to the total
             total_score += part_contribution * part_percentage
@@ -76,11 +77,11 @@ class Lab(models.Model):
         
     def get_student_percentage(self, student):
         """Get a student's percentage score for this lab."""
-        if float(self.total_points) == 0:
-            return 0
+        if self.total_points == 0:
+            return Decimal('0')
             
         score = self.get_student_score(student)
-        return (score / float(self.total_points)) * 100
+        return (score / self.total_points) * Decimal('100')
         
     def get_grade_letter(self, student):
         """Convert percentage to letter grade."""
@@ -203,24 +204,25 @@ class Student(models.Model):
             return 0
         
         return (completed_parts / total_parts) * 100
-        
+    
+
     def get_overall_grade(self):
         """Calculate student's overall grade across all labs."""
         labs = Lab.objects.all()
         if not labs:
-            return 0
+            return Decimal('0')
             
-        total_points = 0
-        earned_points = 0
+        total_points = Decimal('0')
+        earned_points = Decimal('0')
         
         for lab in labs:
-            total_points += float(lab.total_points)
+            total_points += lab.total_points
             earned_points += lab.get_student_score(self)
             
         if total_points == 0:
-            return 0
+            return Decimal('0')
             
-        return (earned_points / total_points) * 100
+        return (earned_points / total_points) * Decimal('100')
         
     def get_course_letter_grade(self):
         """Get student's overall letter grade."""
@@ -264,27 +266,27 @@ class Signoff(models.Model):
         """Get the total score based on quality criteria."""
         scores = self.quality_scores.all()
         if not scores:
-            return 0
+            return Decimal('0')
         
         # Sum up all quality scores
-        return sum(score.score for score in scores)
+        return sum(Decimal(str(score.score)) for score in scores)
     
     def get_max_quality_score(self):
         """Get the maximum possible score based on quality criteria."""
         criteria = QualityCriteria.objects.filter(part=self.part)
         if not criteria:
-            return 0
+            return Decimal('0')
         
         # Sum up maximum points for all criteria
-        return sum(c.max_points for c in criteria)
+        return sum(Decimal(str(c.max_points)) for c in criteria)
     
     def get_quality_percentage(self):
         """Get the quality score as a percentage."""
         max_score = self.get_max_quality_score()
         if max_score == 0:
-            return 0
+            return Decimal('0')
         
-        return (self.get_total_quality_score() / max_score) * 100
+        return (self.get_total_quality_score() / max_score) * Decimal('100')
     
     def get_overall_score(self):
         """Calculate the overall score based on quality scores."""
