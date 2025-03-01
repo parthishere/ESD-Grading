@@ -1,0 +1,149 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}ESD Lab Grading System{% endblock %}</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{% static 'css/styles.css' %}">
+    
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary sticky-top">
+        <div class="container-fluid">
+            <!-- Brand -->
+            {% comment %} <a class="navbar-brand" href="{% url 'labs:dashboard' %}">
+                <i class="fas fa-microchip me-2"></i>ESD Lab Grading
+            </a> {% endcomment %}
+            
+            <!-- Toggle Button -->
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarMain">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
+            <!-- Navigation Items -->
+            <div class="collapse navbar-collapse" id="navbarMain">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        {% comment %} <a class="nav-link" href="{% url 'grading:dashboard' %}">
+                            <i class="fas fa-tachometer-alt me-1"></i>Dashboard
+                        </a> {% endcomment %}
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="labsDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-flask me-1"></i>Labs
+                        </a>
+                        <ul class="dropdown-menu">
+                            {% comment %} <li><a class="dropdown-item" href="{% url 'grading:lab_list' %}">View All Labs</a></li>
+                            <li><a class="dropdown-item" href="{% url 'grading:lab_create' %}">Create New Lab</a></li> {% endcomment %}
+                        </ul>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="studentsDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-user-graduate me-1"></i>Students
+                        </a>
+                        <ul class="dropdown-menu">
+                            {% comment %} <li><a class="dropdown-item" href="{% url 'grading:student_list' %}">View All Students</a></li>
+                            <li><a class="dropdown-item" href="{% url 'grading:student_create' %}">Register New Student</a></li> {% endcomment %}
+                        </ul>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="signoffsDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-clipboard-check me-1"></i>Signoffs
+                        </a>
+                        <ul class="dropdown-menu">
+                            {% comment %} <li><a class="dropdown-item" href="{% url 'grading:signoff_list' %}">View All Signoffs</a></li>
+                            <li><a class="dropdown-item" href="{% url 'grading:signoff_create' %}">Create New Signoff</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{% url 'grading:quick_signoff' %}">Quick Signoff</a></li> {% endcomment %}
+                        </ul>
+                    </li>
+                    <li class="nav-item">
+                        {% comment %} <a class="nav-link" href="{% url 'grading:reports' %}">
+                            <i class="fas fa-chart-bar me-1"></i>Reports
+                        </a> {% endcomment %}
+                    </li>
+                </ul>
+                
+                <!-- Search Bar -->
+                {% comment %} <form class="d-flex" action="{% url 'grading:student_list' %}" method="get">
+                    <div class="input-group">
+                        <input type="text" name="search" class="form-control" placeholder="Search by ID or name">
+                        <button class="btn btn-light" type="submit">
+                            <i class="fas fa-search"></i>
+                        </button>
+                    </div>
+                </form> {% endcomment %}
+                
+                <!-- User Dropdown -->
+                <ul class="navbar-nav ms-3">
+                    {% if request.user.is_authenticated %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-user-circle me-1"></i>{{ request.user.username }}
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li><a class="dropdown-item" href="#">Profile</a></li>
+                            {% if request.user.is_staff %}
+                            <li><a class="dropdown-item" href="{% url 'admin:index' %}">Admin</a></li>
+                            {% endif %}
+                            <li><hr class="dropdown-divider"></li>
+                            {% comment %} <li><a class="dropdown-item" href="{% url 'logout' %}">Logout</a></li> {% endcomment %}
+                        </ul>
+                    </li>
+                    {% else %}
+                    <li class="nav-item">
+                        {% comment %} <a class="nav-link" href="{% url 'login' %}">Login</a> {% endcomment %}
+                    </li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+    
+    <!-- Messages -->
+    {% if messages %}
+    <div class="container mt-3">
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+    
+    <!-- Main Content -->
+    <main class="py-4">
+        {% block content %}{% endblock %}
+    </main>
+    
+    <!-- Footer -->
+    <footer class="footer mt-auto py-3 bg-light">
+        <div class="container text-center">
+            <span class="text-muted">© {% now "Y" %} ESD Lab Grading System</span>
+        </div>
+    </footer>
+    
+    <!-- Bootstrap Bundle with Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    
+    <!-- Custom JavaScript -->
+    <script src="{% static 'js/main.js' %}"></script>
+    
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

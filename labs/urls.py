@@ -1,0 +1,49 @@
+
+
+from django.urls import path, include, re_path
+
+from labs import views
+
+app_name = 'labs'
+
+
+urlpatterns = [
+    path("", views.home_view, name="home"),
+    
+    # path('labs/', views.lab_list, name='lab_list'),
+    # path('lab/create/', views.lab_create, name='lab_create'),
+    # path('lab/edit/<int:pk>/', views.lab_edit, name='lab_edit'),
+    # path('lab/<int:lab_id>/parts/', views.part_list, name='part_list'),
+    
+    # Part management URLs
+    # path('part/create/<int:lab_id>/', views.part_create, name='part_create'),
+    # path('part/edit/<int:pk>/', views.part_edit, name='part_edit'),
+    # path('part/<int:part_id>/criteria/', views.criteria_list, name='criteria_list'),
+    
+    # Criteria management URLs
+    # path('criteria/create/<int:part_id>/', views.criteria_create, name='criteria_create'),
+    # path('criteria/edit/<int:pk>/', views.criteria_edit, name='criteria_edit'),
+    
+    # Student management URLs
+    # path('students/', views.student_list, name='student_list'),
+    # path('student/create/', views.student_create, name='student_create'),
+    # path('student/edit/<int:pk>/', views.student_edit, name='student_edit'),
+    # path('student/<int:student_id>/', views.student_detail, name='student_detail'),
+    
+    # Signoff management URLs
+    # path('signoffs/', views.signoff_list, name='signoff_list'),
+    # path('signoff/create/', views.signoff_create, name='signoff_create'),
+    # path('signoff/<int:pk>/', views.signoff_detail, name='signoff_detail'),
+    # path('signoff/edit/<int:pk>/', views.signoff_edit, name='signoff_edit'),
+    # path('quick-signoff/', views.quick_signoff, name='quick_signoff'),
+    
+    # AJAX endpoints
+    path('api/student-name-search/', views.student_name_search, name='student_name_search'),
+    path('api/get-parts/', views.get_parts, name='get_parts'),
+    path('api/get-criteria/', views.get_criteria, name='get_criteria'),
+    
+    # Reports
+    # path('reports/', views.reports, name='reports'),
+    # path('reports/lab/<int:lab_id>/', views.lab_report, name='lab_report'),
+    # path('reports/students/', views.student_progress_report, name='student_progress_report'),
+]

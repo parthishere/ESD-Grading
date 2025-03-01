@@ -1,0 +1,210 @@
+/* Grading Table */
+.grading-table {
+    border: 2px solid #333;
+    background-color: white;
+}
+
+.grading-table th,
+.grading-table td {
+    vertical-align: middle;
+    border: 1px solid #333;
+    padding: 12px;
+}
+
+.grading-table thead th {
+    background-color: #343a40;
+    color: white;
+    font-weight: bold;
+    text-align: center;
+}
+
+.grading-table th:first-child {
+    text-align: left;
+    background-color: #f8f9fa;
+}
+
+.grading-table tfoot th {
+    background-color: #f8f9fa;
+}
+
+/* Custom Radio Buttons */
+.grading-table input[type="radio"] {
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    width: 24px;
+    height: 24px;
+    background-color: white;
+    border: 2px solid #333;
+    border-radius: 4px;
+    outline: none;
+    cursor: pointer;
+    margin: 0 auto;
+    position: relative;
+    display: inline-block;
+}
+
+.grading-table input[type="radio"]:checked {
+    background-color: #007bff;
+    border-color: #007bff;
+}
+
+.grading-table input[type="radio"]:checked::after {
+    content: '✓';
+    color: white;
+    font-size: 16px;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+/* Column Color Coding */
+.grading-table td:nth-child(2) input[type="radio"]:checked {
+    background-color: #dc3545; /* Not Applicable - Red */
+    border-color: #dc3545;
+}
+
+.grading-table td:nth-child(3) input[type="radio"]:checked {
+    background-color: #fd7e14; /* Poor/Not Complete - Orange */
+    border-color: #fd7e14;
+}
+
+.grading-table td:nth-child(4) input[type="radio"]:checked {
+    background-color: #28a745; /* Meets Requirements - Green */
+    border-color: #28a745;
+}
+
+.grading-table td:nth-child(5) input[type="radio"]:checked {
+    background-color: #17a2b8; /* Exceeds Requirements - Teal */
+    border-color: #17a2b8;
+}
+
+.grading-table td:nth-child(6) input[type="radio"]:checked {
+    background-color: #6f42c1; /* Outstanding - Purple */
+    border-color: #6f42c1;
+}
+
+/* Part Selection */
+.part-item {
+    cursor: pointer;
+    transition: all 0.2s;
+    border-left: 4px solid transparent;
+}
+
+.part-item:hover {
+    background-color: #f8f9fa;
+}
+
+.part-item.active {
+    background-color: #e9f5ff;
+    border-left-color: #007bff;
+}
+
+.part-item .status-badge {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 20px;
+}
+
+.status-badge.approved {
+    background-color: #28a745;
+    color: white;
+}
+
+.status-badge.pending {
+    background-color: #ffc107;
+    color: #212529;
+}
+
+.status-badge.rejected {
+    background-color: #dc3545;
+    color: white;
+}
+
+/* History Section */
+.history-item {
+    padding: 10px;
+    border-left: 3px solid #6c757d;
+    margin-bottom: 15px;
+}
+
+.history-item.approved {
+    border-left-color: #28a745;
+}
+
+.history-item.rejected {
+    border-left-color: #dc3545;
+}
+
+.history-item.pending {
+    border-left-color: #ffc107;
+}
+
+/* Print Styles */
+@media print {
+    body * {
+        visibility: hidden;
+    }
+    
+    #grading-form, #grading-form * {
+        visibility: visible;
+    }
+    
+    #grading-form {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+    }
+    
+    .btn, 
+    #reset-form, 
+    #submit-btn {
+        display: none !important;
+    }
+    
+    .card {
+        border: none !important;
+        box-shadow: none !important;
+    }
+    
+    .card-header {
+        background-color: #fff !important;
+        color: #000 !important;
+        border-bottom: 2px solid #000 !important;
+    }
+    
+    #lab-badge {
+        border: 1px solid #333 !important;
+        background-color: #fff !important;
+        color: #000 !important;
+    }
+}
+
+/* Loading Spinner */
+.spinner-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 9999;
+}
+
+.spinner-container {
+    background-color: white;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
+    text-align: center;
+}
+
+.spinner-border {
+    width: 3rem;
+    height: 3rem;
+}
