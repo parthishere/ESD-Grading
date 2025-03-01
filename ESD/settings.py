@@ -49,9 +49,12 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    
+    'rest_framework',
+    'rest_framework.authtoken',
     
     'labs',
+    
+    'dj_rest_auth',
 ]
 
 MIDDLEWARE = [
@@ -89,24 +92,24 @@ WSGI_APPLICATION = 'ESD.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.postgresql',
-#         'NAME': os.environ['DATABASE_NAME'],
-#         'HOST': os.environ['DATABASE_HOST'],
-#         'PORT': os.environ['DATABASE_PORT'],
-#         'USER': os.environ['DATABASE_USER'],
-#         'PASSWORD': os.environ['DATABASE_PASSWORD'],
-#     }
-# }
-
 DATABASES = {
-
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.environ['POSTGRES_DB'],
+        'HOST': os.environ['PGHOST'],
+        'PORT': os.environ['PGPORT'],
+        'USER': os.environ['POSTGRES_USER'],
+        'PASSWORD': os.environ['POSTGRES_PASSWORD'],
     }
 }
+
+# DATABASES = {
+
+#     'default': {
+#         'ENGINE': 'django.db.backends.sqlite3',
+#         'NAME': os.path.join(BASE_DIR, 'db.sqlite3'),
+#     }
+# }
 
 
 

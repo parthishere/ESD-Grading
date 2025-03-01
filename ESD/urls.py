@@ -21,5 +21,7 @@ import labs
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('', include('labs.urls', namespace='labs'))
+    path('', include('labs.urls', namespace='labs')),
+    
+    path('api/auth/', include('dj_rest_auth.urls')),
 ]
