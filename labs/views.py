@@ -105,7 +105,8 @@ def student_name_search(request):
     students = Student.objects.filter(
         Q(name__icontains=query) | 
         Q(student_id__icontains=query)
-    ).values('id', 'name', 'student_id')[:10]  # Limit to 10 results
+    ).values('id', 'name', 'student_id', 'email')[:10]  # Limit to 10 results
+    print(students)
     
     return JsonResponse({'students': list(students)})
 
