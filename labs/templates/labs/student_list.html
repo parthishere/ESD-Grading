@@ -1,0 +1,156 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Student List | ESD Lab Grading{% endblock %}
+
+{% block extra_css %}
+<style>
+    .student-stats {
+        margin-bottom: 1.5rem;
+    }
+    .action-buttons {
+        white-space: nowrap;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h2">Student Management</h1>
+        <div>
+            <a href="{% url 'labs:batch_toggle_students' %}" class="btn btn-warning me-2">
+                <i class="fas fa-users-cog me-1"></i> Batch Operations
+            </a>
+            <a href="{% url 'labs:student_upload' %}" class="btn btn-success">
+                <i class="fas fa-file-excel me-1"></i> Upload Excel
+            </a>
+        </div>
+    </div>
+    
+    <!-- Student Stats -->
+    <div class="row student-stats">
+        <div class="col-md-4">
+            <div class="card bg-light">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Total Students</h5>
+                    <p class="display-4">{{ total_students }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-success text-white">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Active Students</h5>
+                    <p class="display-4">{{ active_students }}</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card bg-secondary text-white">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Inactive Students</h5>
+                    <p class="display-4">{{ inactive_students }}</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Search and Filter Form -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-6">
+                    <div class="input-group">
+                        <input type="text" name="search" class="form-control" placeholder="Search by ID, name, or email" value="{{ search_query }}">
+                        <button class="btn btn-primary" type="submit">
+                            <i class="fas fa-search"></i> Search
+                        </button>
+                        {% if search_query %}
+                        <a href="{% url 'labs:student_list' %}" class="btn btn-outline-secondary">
+                            <i class="fas fa-times"></i> Clear
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="input-group">
+                        <label class="input-group-text" for="activeFilter">Status</label>
+                        <select class="form-select" id="activeFilter" name="active" onchange="this.form.submit()">
+                            <option value="all" {% if active_filter == 'all' %}selected{% endif %}>All Students</option>
+                            <option value="active" {% if active_filter == 'active' %}selected{% endif %}>Active Only</option>
+                            <option value="inactive" {% if active_filter == 'inactive' %}selected{% endif %}>Inactive Only</option>
+                        </select>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Student Table -->
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Name</th>
+                            <th>Email</th>
+                            <th>Batch</th>
+                            <th>Status</th>
+                            <th>Completion</th>
+                            <th class="text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for student in students %}
+                        <tr>
+                            <td>{{ student.student_id }}</td>
+                            <td>{{ student.name }}</td>
+                            <td>{{ student.email }}</td>
+                            <td>{{ student.batch|date:"M d, Y" }}</td>
+                            <td>
+                                {% if student.active %}
+                                <span class="badge bg-success">Active</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Inactive</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="progress" style="height: 20px;" title="{{ student.get_completion_status|floatformat:1 }}%">
+                                    <div class="progress-bar {% if student.get_completion_status >= 100 %}bg-success{% elif student.get_completion_status >= 50 %}bg-info{% else %}bg-warning{% endif %}" 
+                                         role="progressbar" 
+                                         style="width: {{ student.get_completion_status }}%;" 
+                                         aria-valuenow="{{ student.get_completion_status }}" 
+                                         aria-valuemin="0" 
+                                         aria-valuemax="100">
+                                        {{ student.get_completion_status|floatformat:0 }}%
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="action-buttons text-center">
+                                <a href="{% url 'labs:student_grade_report' student.id %}" class="btn btn-sm btn-primary me-1" title="View grade report">
+                                    <i class="fas fa-chart-bar"></i>
+                                </a>
+                                <a href="{% url 'labs:student_toggle_active' student.id %}" class="btn btn-sm {% if student.active %}btn-warning{% else %}btn-success{% endif %}">
+                                    {% if student.active %}
+                                    <i class="fas fa-user-slash"></i> Deactivate
+                                    {% else %}
+                                    <i class="fas fa-user-check"></i> Activate
+                                    {% endif %}
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="7" class="text-center">No students found. {% if search_query %}<a href="{% url 'labs:student_list' %}">Clear search</a>{% endif %}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,4 +1,5 @@
 {% load static %}
+{% load role_tags %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -22,9 +23,9 @@
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary sticky-top">
         <div class="container-fluid">
             <!-- Brand -->
-            {% comment %} <a class="navbar-brand" href="{% url 'labs:dashboard' %}">
+            <a class="navbar-brand" href="{% url 'labs:home' %}">
                 <i class="fas fa-microchip me-2"></i>ESD Lab Grading
-            </a> {% endcomment %}
+            </a>
             
             <!-- Toggle Button -->
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarMain">
@@ -44,35 +45,56 @@
                             <i class="fas fa-flask me-1"></i>Labs
                         </a>
                         <ul class="dropdown-menu">
-                            {% comment %} <li><a class="dropdown-item" href="{% url 'grading:lab_list' %}">View All Labs</a></li>
-                            <li><a class="dropdown-item" href="{% url 'grading:lab_create' %}">Create New Lab</a></li> {% endcomment %}
+                            <li><a class="dropdown-item" href="{% url 'labs:lab_list' %}">View All Labs</a></li>
+                            {% if request.user.is_staff %}
+                            <li><a class="dropdown-item" href="#">Create New Lab</a></li>
+                            {% endif %}
                         </ul>
                     </li>
+                    {% if request.user.is_authenticated %}
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="studentsDropdown" role="button" data-bs-toggle="dropdown">
                             <i class="fas fa-user-graduate me-1"></i>Students
                         </a>
                         <ul class="dropdown-menu">
-                            {% comment %} <li><a class="dropdown-item" href="{% url 'grading:student_list' %}">View All Students</a></li>
-                            <li><a class="dropdown-item" href="{% url 'grading:student_create' %}">Register New Student</a></li> {% endcomment %}
+                            <li><a class="dropdown-item" href="{% url 'labs:student_list' %}">View All Students</a></li>
+                            {% if request.user|has_role:'instructor' %}
+                            <li><a class="dropdown-item" href="{% url 'labs:student_upload' %}">Upload Student List</a></li>
+                            {% endif %}
                         </ul>
                     </li>
+                    {% endif %}
+                    {% if request.user.is_authenticated %}
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="signoffsDropdown" role="button" data-bs-toggle="dropdown">
                             <i class="fas fa-clipboard-check me-1"></i>Signoffs
                         </a>
                         <ul class="dropdown-menu">
-                            {% comment %} <li><a class="dropdown-item" href="{% url 'grading:signoff_list' %}">View All Signoffs</a></li>
-                            <li><a class="dropdown-item" href="{% url 'grading:signoff_create' %}">Create New Signoff</a></li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li><a class="dropdown-item" href="{% url 'grading:quick_signoff' %}">Quick Signoff</a></li> {% endcomment %}
+                            <li><a class="dropdown-item" href="#">View All Signoffs</a></li>
+                            {% if request.user|has_role:'instructor' or request.user|has_role:'ta' %}
+                            <li><a class="dropdown-item" href="#">Create New Signoff</a></li>
+                            {% endif %}
                         </ul>
                     </li>
-                    <li class="nav-item">
-                        {% comment %} <a class="nav-link" href="{% url 'grading:reports' %}">
-                            <i class="fas fa-chart-bar me-1"></i>Reports
-                        </a> {% endcomment %}
+                    {% endif %}
+                    {% if request.user.is_authenticated and request.user|has_role:'instructor' %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="usersDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-users-cog me-1"></i>Users
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{% url 'labs:user_list' %}">View All Users</a></li>
+                            <li><a class="dropdown-item" href="{% url 'labs:user_create' %}">Create New User</a></li>
+                        </ul>
                     </li>
+                    {% endif %}
+                    {% if request.user.is_authenticated %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'labs:reports' %}">
+                            <i class="fas fa-chart-bar me-1"></i>Reports
+                        </a>
+                    </li>
+                    {% endif %}
                 </ul>
                 
                 <!-- Search Bar -->
@@ -98,12 +120,12 @@
                             <li><a class="dropdown-item" href="{% url 'admin:index' %}">Admin</a></li>
                             {% endif %}
                             <li><hr class="dropdown-divider"></li>
-                            {% comment %} <li><a class="dropdown-item" href="{% url 'logout' %}">Logout</a></li> {% endcomment %}
+                            <li><a class="dropdown-item" href="{% url 'admin:logout' %}">Logout</a></li>
                         </ul>
                     </li>
                     {% else %}
                     <li class="nav-item">
-                        {% comment %} <a class="nav-link" href="{% url 'login' %}">Login</a> {% endcomment %}
+                        <a class="nav-link" href="{% url 'admin:login' %}?next=/">Login</a>
                     </li>
                     {% endif %}
                 </ul>

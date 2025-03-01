@@ -1,0 +1,5 @@
+Django
+python-dotenv
+whitenoise
+openpyxl
+pandas

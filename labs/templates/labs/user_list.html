@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}User Management | ESD Lab Grading{% endblock %}
+
+{% block extra_css %}
+<style>
+    .role-instructor {
+        background-color: #d1e7dd;
+    }
+    .role-ta {
+        background-color: #fff3cd;
+    }
+    .role-student {
+        background-color: #cfe2ff;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h2">User Management</h1>
+        <div>
+            <a href="{% url 'labs:user_create' %}" class="btn btn-primary">
+                <i class="fas fa-user-plus me-1"></i> Create New User
+            </a>
+        </div>
+    </div>
+    
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead>
+                        <tr>
+                            <th>Username</th>
+                            <th>Full Name</th>
+                            <th>Email</th>
+                            <th>Role</th>
+                            <th>Status</th>
+                            <th class="text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for user in users %}
+                        <tr{% if user.role_info %} class="role-{{ user.role_info.role }}"{% endif %}>
+                            <td>{{ user.username }}</td>
+                            <td>{{ user.get_full_name|default:"-" }}</td>
+                            <td>{{ user.email|default:"-" }}</td>
+                            <td>
+                                {% if user.role_info %}
+                                    <span class="badge {% if user.role_info.role == 'instructor' %}bg-success{% elif user.role_info.role == 'ta' %}bg-warning text-dark{% else %}bg-info{% endif %}">
+                                        {{ user.role_info.get_role_display }}
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-secondary">No Role</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if user.is_active %}
+                                <span class="badge bg-success">Active</span>
+                                {% else %}
+                                <span class="badge bg-danger">Inactive</span>
+                                {% endif %}
+                                
+                                {% if user.is_superuser %}
+                                <span class="badge bg-dark">Superuser</span>
+                                {% endif %}
+                                
+                                {% if user.is_staff %}
+                                <span class="badge bg-primary">Staff</span>
+                                {% endif %}
+                            </td>
+                            <td class="text-center">
+                                <a href="{% url 'labs:user_edit' user.id %}" class="btn btn-sm btn-primary">
+                                    <i class="fas fa-edit"></i> Edit
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center">No users found.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

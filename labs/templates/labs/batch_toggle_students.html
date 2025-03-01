@@ -1,0 +1,156 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Batch Student Operations | ESD Lab Grading{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-container {
+        max-width: 900px;
+        margin: 0 auto;
+    }
+    .students-container {
+        max-height: 300px;
+        overflow-y: auto;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container form-container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h2">Batch Student Operations</h1>
+        <a href="{% url 'labs:student_list' %}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left me-1"></i> Back to List
+        </a>
+    </div>
+    
+    <div class="card">
+        <div class="card-header">
+            <h5 class="card-title mb-0">Activate or Deactivate Multiple Students</h5>
+        </div>
+        <div class="card-body">
+            <form method="post">
+                {% csrf_token %}
+                
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <label class="form-label">Choose Action</label>
+                        <div class="d-flex gap-3">
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="action" id="activate" value="activate" required>
+                                <label class="form-check-label" for="activate">
+                                    <span class="text-success"><i class="fas fa-user-check me-1"></i> Activate</span>
+                                </label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="radio" name="action" id="deactivate" value="deactivate">
+                                <label class="form-check-label" for="deactivate">
+                                    <span class="text-danger"><i class="fas fa-user-slash me-1"></i> Deactivate</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h6 class="mb-0">By Batch Date</h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-text mb-3">
+                            Apply action to all students in a particular batch.
+                        </div>
+                        
+                        <select name="batch_date" class="form-select">
+                            <option value="">-- Select Batch --</option>
+                            {% for batch in batches %}
+                            <option value="{{ batch|date:'Y-m-d' }}">{{ batch|date:"F d, Y" }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0">By Individual Students</h6>
+                            <div>
+                                <button type="button" class="btn btn-sm btn-outline-primary" id="selectAll">Select All</button>
+                                <button type="button" class="btn btn-sm btn-outline-secondary" id="deselectAll">Deselect All</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-text mb-3">
+                            Select individual students to apply the action.
+                        </div>
+                        
+                        <div class="students-container">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 40px;"></th>
+                                        <th>ID</th>
+                                        <th>Name</th>
+                                        <th>Batch</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for student in students %}
+                                    <tr>
+                                        <td>
+                                            <input type="checkbox" name="student_ids" value="{{ student.id }}" class="form-check-input student-checkbox">
+                                        </td>
+                                        <td>{{ student.student_id }}</td>
+                                        <td>{{ student.name }}</td>
+                                        <td>{{ student.batch|date:"M d, Y" }}</td>
+                                        <td>
+                                            {% if student.active %}
+                                            <span class="badge bg-success">Active</span>
+                                            {% else %}
+                                            <span class="badge bg-secondary">Inactive</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-1"></i> <strong>Warning:</strong> This operation will affect multiple students at once. Please double-check your selection before proceeding.
+                </div>
+                
+                <div class="d-grid">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-check-circle me-1"></i> Apply Action
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Select/deselect all checkboxes
+        document.getElementById('selectAll').addEventListener('click', function() {
+            document.querySelectorAll('.student-checkbox').forEach(function(checkbox) {
+                checkbox.checked = true;
+            });
+        });
+        
+        document.getElementById('deselectAll').addEventListener('click', function() {
+            document.querySelectorAll('.student-checkbox').forEach(function(checkbox) {
+                checkbox.checked = false;
+            });
+        });
+    });
+</script>
+{% endblock %}

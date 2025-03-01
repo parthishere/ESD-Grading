@@ -10,7 +10,7 @@ app_name = 'labs'
 urlpatterns = [
     path("", views.home_view, name="home"),
     
-    # path('labs/', views.lab_list, name='lab_list'),
+    path('labs/', views.lab_list, name='lab_list'),
     # path('lab/create/', views.lab_create, name='lab_create'),
     # path('lab/edit/<int:pk>/', views.lab_edit, name='lab_edit'),
     # path('lab/<int:lab_id>/parts/', views.part_list, name='part_list'),
@@ -25,10 +25,18 @@ urlpatterns = [
     # path('criteria/edit/<int:pk>/', views.criteria_edit, name='criteria_edit'),
     
     # Student management URLs
-    # path('students/', views.student_list, name='student_list'),
+    path('students/', views.student_list, name='student_list'),
+    path('students/upload/', views.student_upload, name='student_upload'),
+    path('students/batch/', views.batch_toggle_students, name='batch_toggle_students'),
+    path('student/toggle-active/<int:student_id>/', views.student_toggle_active, name='student_toggle_active'),
     # path('student/create/', views.student_create, name='student_create'),
     # path('student/edit/<int:pk>/', views.student_edit, name='student_edit'),
     # path('student/<int:student_id>/', views.student_detail, name='student_detail'),
+    
+    # User management URLs
+    path('users/', views.user_list, name='user_list'),
+    path('user/create/', views.user_create, name='user_create'),
+    path('user/edit/<int:user_id>/', views.user_edit, name='user_edit'),
     
     # Signoff management URLs
     # path('signoffs/', views.signoff_list, name='signoff_list'),
@@ -39,11 +47,19 @@ urlpatterns = [
     
     # AJAX endpoints
     path('api/student-name-search/', views.student_name_search, name='student_name_search'),
+    path('api/get-signoffs/', views.get_existing_signoff, name='get_existing_signoff'),
     path('api/get-parts/', views.get_parts, name='get_parts'),
     path('api/get-criteria/', views.get_criteria, name='get_criteria'),
+    path('api/quick-signoff/', views.quick_signoff_submit, name='quick_signoff_submit'),
+    path('api/get-signoff-details/', views.get_signoff_details, name='get_signoff_details'),
     
     # Reports
-    # path('reports/', views.reports, name='reports'),
-    # path('reports/lab/<int:lab_id>/', views.lab_report, name='lab_report'),
-    # path('reports/students/', views.student_progress_report, name='student_progress_report'),
+    path('reports/', views.reports, name='reports'),
+    path('reports/lab/', views.lab_report, name='lab_report_default'),
+    path('reports/lab/<int:lab_id>/', views.lab_report, name='lab_report'),
+    path('reports/students/', views.student_progress_report, name='student_progress_report'),
+    path('reports/instructors/', views.ta_report, name='ta_report'),
+    path('reports/grades/', views.student_grade_report, name='student_grade_report'),
+    path('reports/grades/<int:student_id>/', views.student_grade_report, name='student_grade_report'),
+    path('api/quick-stats/', views.quick_stats, name='quick_stats'),
 ]
