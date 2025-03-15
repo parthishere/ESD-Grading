@@ -158,7 +158,8 @@ class StudentAutocomplete {
         fetch(`${this.options.searchEndpoint}?query=${encodeURIComponent(query)}`)
             .then(response => response.json())
             .then(data => {
-                this.results = data.students;
+                // Accept data.results or data.students for compatibility
+                this.results = data.results || data.students || [];
                 this.renderResults();
             })
             .catch(error => {
@@ -170,7 +171,8 @@ class StudentAutocomplete {
     renderResults() {
         this.resultsContainer.innerHTML = '';
         
-        if (this.results.length === 0) {
+        // Check if this.results exists and is an array
+        if (!this.results || !Array.isArray(this.results) || this.results.length === 0) {
             this.renderNoResults();
             return;
         }
@@ -296,7 +298,7 @@ class StudentAutocomplete {
     
     selectResult(student) {
         // Fill input with selected student name
-        this.inputField.value = student.name;
+        this.inputField.value = student.name || student.display || '';
         
         // Hide results
         this.hideResults();
@@ -325,15 +327,25 @@ document.addEventListener('DOMContentLoaded', function() {
                     studentIdField.value = student.student_id;
                 }
                 
-                // Show student info
-                if (studentEmailDisplay) {
-                    studentEmailDisplay.textContent = student.email || 'No email provided';
-                }
-                
-                // Show student info container
+                // Show student name and email in info container
                 if (studentInfoContainer) {
+                    // Find student name element in container
+                    const nameElement = studentInfoContainer.querySelector('#student-name');
+                    if (nameElement) {
+                        nameElement.textContent = student.name;
+                    }
+                    
+                    // Set email if there's an element for it
+                    if (studentEmailDisplay) {
+                        studentEmailDisplay.textContent = student.email || 'No email provided';
+                    }
+                    
+                    // Show the container
                     studentInfoContainer.style.display = 'block';
                 }
+                
+                // Log to console for debugging
+                console.log('Student selected:', student);
                 
                 // Trigger event to notify other components
                 const event = new CustomEvent('studentSelected', { 

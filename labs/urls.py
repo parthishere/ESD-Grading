@@ -64,4 +64,8 @@ urlpatterns = [
     path('reports/grades/', views.student_grade_report, name='student_grade_report'),
     path('reports/grades/<int:student_id>/', views.student_grade_report, name='student_grade_report'),
     path('api/quick-stats/', views.quick_stats, name='quick_stats'),
+    
+    # CSV Exports
+    path('export/lab/<int:lab_id>/csv/', views.export_lab_csv, name='export_lab_csv'),
+    path('export/part/<int:part_id>/csv/', views.export_part_csv, name='export_part_csv'),
 ]

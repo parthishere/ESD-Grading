@@ -243,7 +243,7 @@
             {% if evaluation_sheet %}
             <div class="card mb-4">
                 <div class="card-header bg-primary text-white">
-                    <h3 class="h5 mb-0"><i class="fas fa-check-square me-2"></i>Evaluation Sheet</h3>
+                    <h3 class="h5 mb-0"><i class="fas fa-check-square me-2"></i>Evaluation Sheet {% if evaluation_sheet.rubric %}({{ evaluation_sheet.rubric.name }}){% endif %}</h3>
                 </div>
                 <div class="card-body">
                     <div class="table-responsive">
@@ -257,54 +257,66 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr>
-                                    <td>Cleanliness</td>
-                                    <td>{{ evaluation_sheet.get_cleanliness_display }}</td>
-                                    <td>{{ evaluation_sheet.cleanliness_max_marks }}</td>
-                                    <td>{{ cleanliness_earned|floatformat:2 }}</td>
-                                </tr>
-                                <tr>
-                                    <td>Hardware</td>
-                                    <td>{{ evaluation_sheet.get_hardware_display }}</td>
-                                    <td>{{ evaluation_sheet.hardware_max_marks }}</td>
-                                    <td>{{ hardware_earned|floatformat:2 }}</td>
-                                </tr>
-                                <tr>
-                                    <td>Timeliness</td>
-                                    <td>{{ evaluation_sheet.get_timeliness_display }}</td>
-                                    <td>{{ evaluation_sheet.timeliness_max_marks }}</td>
-                                    <td>{{ timeliness_earned|floatformat:2 }}</td>
-                                </tr>
-                                <tr>
-                                    <td>Student Preparation</td>
-                                    <td>{{ evaluation_sheet.get_student_preparation_display }}</td>
-                                    <td>{{ evaluation_sheet.student_preparation_max_marks }}</td>
-                                    <td>{{ student_preparation_earned|floatformat:2 }}</td>
-                                </tr>
-                                <tr>
-                                    <td>Code Implementation</td>
-                                    <td>{{ evaluation_sheet.get_code_implementation_display }}</td>
-                                    <td>{{ evaluation_sheet.code_implementation_max_marks }}</td>
-                                    <td>{{ code_implementation_earned|floatformat:2 }}</td>
-                                </tr>
-                                <tr>
-                                    <td>Commenting</td>
-                                    <td>{{ evaluation_sheet.get_commenting_display }}</td>
-                                    <td>{{ evaluation_sheet.commenting_max_marks }}</td>
-                                    <td>{{ commenting_earned|floatformat:2 }}</td>
-                                </tr>
-                                <tr>
-                                    <td>Schematic</td>
-                                    <td>{{ evaluation_sheet.get_schematic_display }}</td>
-                                    <td>{{ evaluation_sheet.schematic_max_marks }}</td>
-                                    <td>{{ schematic_earned|floatformat:2 }}</td>
-                                </tr>
-                                <tr>
-                                    <td>Course Participation</td>
-                                    <td>{{ evaluation_sheet.get_course_participation_display }}</td>
-                                    <td>{{ evaluation_sheet.course_participation_max_marks }}</td>
-                                    <td>{{ course_participation_earned|floatformat:2 }}</td>
-                                </tr>
+                                {% load role_tags %}
+                                {% if evaluation_sheet.rubric %}
+                                    {% for criterion_key, criterion in evaluation_sheet.rubric.criteria_data.items %}
+                                    <tr>
+                                        <td>{{ criterion.name }}</td>
+                                        <td>{{ evaluation_sheet.get_criterion_display:criterion_key }}</td>
+                                        <td>{{ criterion.max_marks }}</td>
+                                        <td>{{ evaluation_sheet.get_criterion_earned_marks:criterion_key|floatformat:2 }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr>
+                                        <td>Cleanliness</td>
+                                        <td>{{ evaluation_sheet.get_cleanliness_display }}</td>
+                                        <td>{{ evaluation_sheet.cleanliness_max_marks }}</td>
+                                        <td>{{ cleanliness_earned|floatformat:2 }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Hardware</td>
+                                        <td>{{ evaluation_sheet.get_hardware_display }}</td>
+                                        <td>{{ evaluation_sheet.hardware_max_marks }}</td>
+                                        <td>{{ hardware_earned|floatformat:2 }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Timeliness</td>
+                                        <td>{{ evaluation_sheet.get_timeliness_display }}</td>
+                                        <td>{{ evaluation_sheet.timeliness_max_marks }}</td>
+                                        <td>{{ timeliness_earned|floatformat:2 }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Student Preparation</td>
+                                        <td>{{ evaluation_sheet.get_student_preparation_display }}</td>
+                                        <td>{{ evaluation_sheet.student_preparation_max_marks }}</td>
+                                        <td>{{ student_preparation_earned|floatformat:2 }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Code Implementation</td>
+                                        <td>{{ evaluation_sheet.get_code_implementation_display }}</td>
+                                        <td>{{ evaluation_sheet.code_implementation_max_marks }}</td>
+                                        <td>{{ code_implementation_earned|floatformat:2 }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Commenting</td>
+                                        <td>{{ evaluation_sheet.get_commenting_display }}</td>
+                                        <td>{{ evaluation_sheet.commenting_max_marks }}</td>
+                                        <td>{{ commenting_earned|floatformat:2 }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Schematic</td>
+                                        <td>{{ evaluation_sheet.get_schematic_display }}</td>
+                                        <td>{{ evaluation_sheet.schematic_max_marks }}</td>
+                                        <td>{{ schematic_earned|floatformat:2 }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td>Course Participation</td>
+                                        <td>{{ evaluation_sheet.get_course_participation_display }}</td>
+                                        <td>{{ evaluation_sheet.course_participation_max_marks }}</td>
+                                        <td>{{ course_participation_earned|floatformat:2 }}</td>
+                                    </tr>
+                                {% endif %}
                             </tbody>
                             <tfoot class="table-light">
                                 <tr>

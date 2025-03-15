@@ -452,7 +452,7 @@ class EvaluationSheet(models.Model):
     }
     
     signoff = models.ForeignKey(Signoff, on_delete=models.CASCADE, related_name='evaluation_sheet')
-    rubric = models.ForeignKey(EvaluationRubric, on_delete=models.PROTECT, related_name='evaluation_sheets')
+    rubric = models.ForeignKey(EvaluationRubric, on_delete=models.PROTECT, related_name='evaluation_sheets', null=True, blank=True)
     
     # Store evaluations as serialized JSON
     evaluations = models.JSONField(default=dict)

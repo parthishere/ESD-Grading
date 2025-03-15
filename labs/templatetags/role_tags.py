@@ -37,3 +37,13 @@ def get_part_status(part, student):
         return signoff.status
     except Signoff.DoesNotExist:
         return "not_started"
+        
+@register.filter(name='get_item')
+def get_item(dictionary, key):
+    """
+    Get an item from a dictionary using key.
+    Usage: {{ dictionary|get_item:key }}
+    """
+    if not dictionary:
+        return None
+    return dictionary.get(key)

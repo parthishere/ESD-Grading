@@ -85,15 +85,32 @@ document.addEventListener("DOMContentLoaded", function () {
     // Show loading indicator
     showSpinner();
 
+    // Log for debugging
+    console.log("Loading parts for lab ID:", labId);
+
     // AJAX call to get parts for the selected lab
-    fetch(`/api/get-parts/?lab_id=${labId}`)
-      .then((response) => response.json())
+    fetch(`/api/get-parts/?lab_id=${labId}`, {
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRFToken': getCsrfToken(),
+        }
+      })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+      })
       .then((data) => {
         hideSpinner();
 
+        // Log received data for debugging
+        console.log("Parts data received:", data);
+
+        // Store the parts data
         currentParts = data;
 
-        if (data.length > 0) {
+        if (Array.isArray(data) && data.length > 0) {
           // Render parts
           renderParts(data);
           partSelection.style.display = "block";
@@ -110,8 +127,8 @@ document.addEventListener("DOMContentLoaded", function () {
       })
       .catch((error) => {
         hideSpinner();
-        console.error("Error:", error);
-        showAlert("Error loading parts", "danger");
+        console.error("Error loading parts:", error);
+        showAlert("Error loading parts: " + error.message, "danger");
       });
   }
 
@@ -199,17 +216,34 @@ document.addEventListener("DOMContentLoaded", function () {
     // Show loading indicator
     showSpinner();
 
+    // Log for debugging
+    console.log("Loading criteria for part ID:", partId);
+
     // AJAX call to get criteria for the selected part
-    fetch(`/api/get-criteria/?part_id=${partId}`)
-      .then((response) => response.json())
+    fetch(`/api/get-criteria/?part_id=${partId}`, {
+        headers: {
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRFToken': getCsrfToken(),
+        }
+      })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        return response.json();
+      })
       .then((data) => {
         hideSpinner();
 
+        // Log received data for debugging
+        console.log("Criteria data received:", data);
+
         currentCriteria = data;
 
-        if (data.length > 0) {
+        // Check if data has criteria
+        if (data && (data.criteria || data.rubric_criteria)) {
           // Render criteria
-          renderCriteria(data);
+          renderCriteria(data.criteria || []);
 
           // Update form headers
           const selectedLab = labSelect.options[labSelect.selectedIndex].text;
@@ -233,8 +267,8 @@ document.addEventListener("DOMContentLoaded", function () {
       })
       .catch((error) => {
         hideSpinner();
-        console.error("Error:", error);
-        showAlert("Error loading criteria", "danger");
+        console.error("Error loading criteria:", error);
+        showAlert("Error loading criteria: " + error.message, "danger");
       });
   }
 
@@ -624,15 +658,37 @@ document.addEventListener("DOMContentLoaded", function () {
     // Show loading indicator
     showSpinner();
 
-    // Get form data
-    const formData = new FormData(signoffForm);
+    // Collect form data into an object
+    const formData = {
+      student_id: studentIdInput.value,
+      part_id: partIdInput.value,
+      comments: document.getElementById("comments").value,
+      overall_score: document.querySelector('input[name="overall_score"]:checked').value,
+      criteria_scores: {},
+      rubric_evaluations: {}
+    };
+
+    // Get quality criteria scores
+    document.querySelectorAll('input[name^="criteria_"]:checked').forEach(radio => {
+      const criteriaId = radio.name.replace('criteria_', '');
+      formData.criteria_scores[criteriaId] = radio.value;
+    });
+
+    // Get evaluation rubric values
+    document.querySelectorAll('select[name^="eval_"]').forEach(select => {
+      if (!select.name.includes('_max')) {
+        const criterionKey = select.name.replace('eval_', '');
+        formData.rubric_evaluations[criterionKey] = select.value;
+      }
+    });
 
     // AJAX call to submit signoff
     fetch("/api/quick-signoff/", {
       method: "POST",
-      body: formData,
+      body: JSON.stringify(formData),
       headers: {
         "X-CSRFToken": getCsrfToken(),
+        "Content-Type": "application/json"
       },
     })
       .then((response) => response.json())

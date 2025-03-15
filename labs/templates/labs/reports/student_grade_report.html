@@ -57,9 +57,15 @@
             <a href="{% url 'labs:reports' %}" class="btn btn-secondary">
                 <i class="fas fa-arrow-left me-1"></i> Back to Reports
             </a>
-            <a href="?format=csv" class="btn btn-success">
-                <i class="fas fa-file-csv me-1"></i> Download CSV
-            </a>
+            {% if report_data.0.student.id %}
+                <a href="?format=csv&student_id={{ report_data.0.student.id }}" class="btn btn-success">
+                    <i class="fas fa-file-csv me-1"></i> Download CSV
+                </a>
+            {% else %}
+                <a href="?format=csv" class="btn btn-success">
+                    <i class="fas fa-file-csv me-1"></i> Download CSV
+                </a>
+            {% endif %}
             <a href="?format=pdf" class="btn btn-danger">
                 <i class="fas fa-file-pdf me-1"></i> Download PDF
             </a>

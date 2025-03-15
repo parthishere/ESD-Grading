@@ -79,6 +79,9 @@
                     <a href="{% url 'labs:home' %}?lab_id={{ part.lab.id }}&part_id={{ part.id }}{% if filtered_student %}&student_id={{ filtered_student.student_id }}{% endif %}" class="btn btn-success ms-2">
                         <i class="fas fa-clipboard-check me-1"></i> Grade This Part
                     </a>
+                    <a href="{% url 'labs:export_part_csv' part.id %}" class="btn btn-secondary ms-2">
+                        <i class="fas fa-file-csv me-1"></i> Export CSV
+                    </a>
                 </div>
             </div>
             <div class="text-muted mb-3">

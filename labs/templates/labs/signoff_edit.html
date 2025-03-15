@@ -155,6 +155,16 @@
                         <h3 class="h5 mb-0"><i class="fas fa-check-square me-2"></i>Evaluation Sheet</h3>
                     </div>
                     <div class="card-body">
+                        <div class="form-group mb-3">
+                            <label for="rubric" class="form-label">Select Evaluation Rubric</label>
+                            <select name="rubric_id" id="rubric" class="form-select">
+                                {% for rubric in available_rubrics %}
+                                <option value="{{ rubric.id }}" {% if evaluation_sheet.rubric.id == rubric.id %}selected{% endif %}>{{ rubric.name }}</option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">The selected rubric determines which criteria will be used for evaluation.</div>
+                        </div>
+                    
                         <div class="table-responsive">
                             <table class="table table-bordered evaluation-table">
                                 <thead>
@@ -165,126 +175,21 @@
                                     </tr>
                                 </thead>
                                 <tbody>
+                                    {% for criterion_key, criterion in evaluation_sheet.rubric.criteria_data.items %}
                                     <tr>
-                                        <td>Cleanliness</td>
+                                        <td>{{ criterion.name }}</td>
+                                        <td class="text-center">{{ criterion.max_marks }}</td>
                                         <td>
-                                            <input type="number" name="eval_cleanliness_max" class="form-control" step="0.5" min="0" value="{{ evaluation_sheet.cleanliness_max_marks|default:'5.0' }}">
-                                        </td>
-                                        <td>
-                                            <select name="eval_cleanliness" class="form-select">
-                                                <option value="ER" {% if evaluation_sheet.cleanliness == 'ER' %}selected{% endif %}>Exceeds Requirements</option>
-                                                <option value="MR" {% if evaluation_sheet.cleanliness == 'MR' %}selected{% endif %}>Meets Requirements</option>
-                                                <option value="MM" {% if evaluation_sheet.cleanliness == 'MM' %}selected{% endif %}>Minimally Meets</option>
-                                                <option value="IR" {% if evaluation_sheet.cleanliness == 'IR' %}selected{% endif %}>Improvement Required</option>
-                                                <option value="ND" {% if evaluation_sheet.cleanliness == 'ND' %}selected{% endif %}>Not Demonstrated</option>
+                                            <select name="eval_{{ criterion_key }}" class="form-select">
+                                                <option value="ER" {% if evaluation_sheet.evaluations|get_item:criterion_key == 'ER' %}selected{% endif %}>Exceeds Requirements</option>
+                                                <option value="MR" {% if evaluation_sheet.evaluations|get_item:criterion_key == 'MR' %}selected{% endif %}>Meets Requirements</option>
+                                                <option value="MM" {% if evaluation_sheet.evaluations|get_item:criterion_key == 'MM' %}selected{% endif %}>Minimally Meets</option>
+                                                <option value="IR" {% if evaluation_sheet.evaluations|get_item:criterion_key == 'IR' %}selected{% endif %}>Improvement Required</option>
+                                                <option value="ND" {% if evaluation_sheet.evaluations|get_item:criterion_key == 'ND' %}selected{% endif %}>Not Demonstrated</option>
                                             </select>
                                         </td>
                                     </tr>
-                                    <tr>
-                                        <td>Hardware</td>
-                                        <td>
-                                            <input type="number" name="eval_hardware_max" class="form-control" step="0.5" min="0" value="{{ evaluation_sheet.hardware_max_marks|default:'10.0' }}">
-                                        </td>
-                                        <td>
-                                            <select name="eval_hardware" class="form-select">
-                                                <option value="ER" {% if evaluation_sheet.hardware == 'ER' %}selected{% endif %}>Exceeds Requirements</option>
-                                                <option value="MR" {% if evaluation_sheet.hardware == 'MR' %}selected{% endif %}>Meets Requirements</option>
-                                                <option value="MM" {% if evaluation_sheet.hardware == 'MM' %}selected{% endif %}>Minimally Meets</option>
-                                                <option value="IR" {% if evaluation_sheet.hardware == 'IR' %}selected{% endif %}>Improvement Required</option>
-                                                <option value="ND" {% if evaluation_sheet.hardware == 'ND' %}selected{% endif %}>Not Demonstrated</option>
-                                            </select>
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>Timeliness</td>
-                                        <td>
-                                            <input type="number" name="eval_timeliness_max" class="form-control" step="0.5" min="0" value="{{ evaluation_sheet.timeliness_max_marks|default:'5.0' }}">
-                                        </td>
-                                        <td>
-                                            <select name="eval_timeliness" class="form-select">
-                                                <option value="ER" {% if evaluation_sheet.timeliness == 'ER' %}selected{% endif %}>Exceeds Requirements</option>
-                                                <option value="MR" {% if evaluation_sheet.timeliness == 'MR' %}selected{% endif %}>Meets Requirements</option>
-                                                <option value="MM" {% if evaluation_sheet.timeliness == 'MM' %}selected{% endif %}>Minimally Meets</option>
-                                                <option value="IR" {% if evaluation_sheet.timeliness == 'IR' %}selected{% endif %}>Improvement Required</option>
-                                                <option value="ND" {% if evaluation_sheet.timeliness == 'ND' %}selected{% endif %}>Not Demonstrated</option>
-                                            </select>
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>Student Preparation</td>
-                                        <td>
-                                            <input type="number" name="eval_student_preparation_max" class="form-control" step="0.5" min="0" value="{{ evaluation_sheet.student_preparation_max_marks|default:'10.0' }}">
-                                        </td>
-                                        <td>
-                                            <select name="eval_student_preparation" class="form-select">
-                                                <option value="ER" {% if evaluation_sheet.student_preparation == 'ER' %}selected{% endif %}>Exceeds Requirements</option>
-                                                <option value="MR" {% if evaluation_sheet.student_preparation == 'MR' %}selected{% endif %}>Meets Requirements</option>
-                                                <option value="MM" {% if evaluation_sheet.student_preparation == 'MM' %}selected{% endif %}>Minimally Meets</option>
-                                                <option value="IR" {% if evaluation_sheet.student_preparation == 'IR' %}selected{% endif %}>Improvement Required</option>
-                                                <option value="ND" {% if evaluation_sheet.student_preparation == 'ND' %}selected{% endif %}>Not Demonstrated</option>
-                                            </select>
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>Code Implementation</td>
-                                        <td>
-                                            <input type="number" name="eval_code_implementation_max" class="form-control" step="0.5" min="0" value="{{ evaluation_sheet.code_implementation_max_marks|default:'15.0' }}">
-                                        </td>
-                                        <td>
-                                            <select name="eval_code_implementation" class="form-select">
-                                                <option value="ER" {% if evaluation_sheet.code_implementation == 'ER' %}selected{% endif %}>Exceeds Requirements</option>
-                                                <option value="MR" {% if evaluation_sheet.code_implementation == 'MR' %}selected{% endif %}>Meets Requirements</option>
-                                                <option value="MM" {% if evaluation_sheet.code_implementation == 'MM' %}selected{% endif %}>Minimally Meets</option>
-                                                <option value="IR" {% if evaluation_sheet.code_implementation == 'IR' %}selected{% endif %}>Improvement Required</option>
-                                                <option value="ND" {% if evaluation_sheet.code_implementation == 'ND' %}selected{% endif %}>Not Demonstrated</option>
-                                            </select>
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>Commenting</td>
-                                        <td>
-                                            <input type="number" name="eval_commenting_max" class="form-control" step="0.5" min="0" value="{{ evaluation_sheet.commenting_max_marks|default:'5.0' }}">
-                                        </td>
-                                        <td>
-                                            <select name="eval_commenting" class="form-select">
-                                                <option value="ER" {% if evaluation_sheet.commenting == 'ER' %}selected{% endif %}>Exceeds Requirements</option>
-                                                <option value="MR" {% if evaluation_sheet.commenting == 'MR' %}selected{% endif %}>Meets Requirements</option>
-                                                <option value="MM" {% if evaluation_sheet.commenting == 'MM' %}selected{% endif %}>Minimally Meets</option>
-                                                <option value="IR" {% if evaluation_sheet.commenting == 'IR' %}selected{% endif %}>Improvement Required</option>
-                                                <option value="ND" {% if evaluation_sheet.commenting == 'ND' %}selected{% endif %}>Not Demonstrated</option>
-                                            </select>
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>Schematic</td>
-                                        <td>
-                                            <input type="number" name="eval_schematic_max" class="form-control" step="0.5" min="0" value="{{ evaluation_sheet.schematic_max_marks|default:'10.0' }}">
-                                        </td>
-                                        <td>
-                                            <select name="eval_schematic" class="form-select">
-                                                <option value="ER" {% if evaluation_sheet.schematic == 'ER' %}selected{% endif %}>Exceeds Requirements</option>
-                                                <option value="MR" {% if evaluation_sheet.schematic == 'MR' %}selected{% endif %}>Meets Requirements</option>
-                                                <option value="MM" {% if evaluation_sheet.schematic == 'MM' %}selected{% endif %}>Minimally Meets</option>
-                                                <option value="IR" {% if evaluation_sheet.schematic == 'IR' %}selected{% endif %}>Improvement Required</option>
-                                                <option value="ND" {% if evaluation_sheet.schematic == 'ND' %}selected{% endif %}>Not Demonstrated</option>
-                                            </select>
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td>Course Participation</td>
-                                        <td>
-                                            <input type="number" name="eval_course_participation_max" class="form-control" step="0.5" min="0" value="{{ evaluation_sheet.course_participation_max_marks|default:'5.0' }}">
-                                        </td>
-                                        <td>
-                                            <select name="eval_course_participation" class="form-select">
-                                                <option value="ER" {% if evaluation_sheet.course_participation == 'ER' %}selected{% endif %}>Exceeds Requirements</option>
-                                                <option value="MR" {% if evaluation_sheet.course_participation == 'MR' %}selected{% endif %}>Meets Requirements</option>
-                                                <option value="MM" {% if evaluation_sheet.course_participation == 'MM' %}selected{% endif %}>Minimally Meets</option>
-                                                <option value="IR" {% if evaluation_sheet.course_participation == 'IR' %}selected{% endif %}>Improvement Required</option>
-                                                <option value="ND" {% if evaluation_sheet.course_participation == 'ND' %}selected{% endif %}>Not Demonstrated</option>
-                                            </select>
-                                        </td>
-                                    </tr>
+                                    {% endfor %}
                                 </tbody>
                             </table>
                         </div>
