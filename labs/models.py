@@ -47,11 +47,88 @@ class UserRole(models.Model):
             self.user.save()
 
 
+class GradeScale(models.Model):
+    """Model representing a reusable grade scale that can be applied to labs."""
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+    is_default = models.BooleanField(default=False)
+    
+    # Grade thresholds (percentage values)
+    a_plus_threshold = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('97.0'))
+    a_threshold = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('93.0'))
+    a_minus_threshold = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('90.0'))
+    b_plus_threshold = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('87.0'))
+    b_threshold = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('83.0'))
+    b_minus_threshold = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('80.0'))
+    c_plus_threshold = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('77.0'))
+    c_threshold = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('73.0'))
+    c_minus_threshold = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('70.0'))
+    d_plus_threshold = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('67.0'))
+    d_threshold = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('63.0'))
+    d_minus_threshold = models.DecimalField(max_digits=5, decimal_places=2, default=Decimal('60.0'))
+    
+    class Meta:
+        verbose_name = "Grade Scale"
+        verbose_name_plural = "Grade Scales"
+    
+    def __str__(self):
+        return self.name
+    
+    def save(self, *args, **kwargs):
+        # Ensure only one default grade scale
+        if self.is_default:
+            GradeScale.objects.filter(is_default=True).exclude(pk=self.pk).update(is_default=False)
+        super().save(*args, **kwargs)
+    
+    @classmethod
+    def get_default_scale(cls):
+        """Returns the default grade scale or creates one if none exists."""
+        default_scale = cls.objects.filter(is_default=True).first()
+        if not default_scale:
+            default_scale = cls.objects.create(
+                name="Default Grade Scale",
+                description="Standard grade scale for labs",
+                is_default=True
+            )
+        return default_scale
+    
+    def get_letter_grade(self, percentage):
+        """Get letter grade based on percentage using this scale."""
+        if percentage >= self.a_plus_threshold:
+            return 'A+'
+        elif percentage >= self.a_threshold:
+            return 'A'
+        elif percentage >= self.a_minus_threshold:
+            return 'A-'
+        elif percentage >= self.b_plus_threshold:
+            return 'B+'
+        elif percentage >= self.b_threshold:
+            return 'B'
+        elif percentage >= self.b_minus_threshold:
+            return 'B-'
+        elif percentage >= self.c_plus_threshold:
+            return 'C+'
+        elif percentage >= self.c_threshold:
+            return 'C'
+        elif percentage >= self.c_minus_threshold:
+            return 'C-'
+        elif percentage >= self.d_plus_threshold:
+            return 'D+'
+        elif percentage >= self.d_threshold:
+            return 'D'
+        elif percentage >= self.d_minus_threshold:
+            return 'D-'
+        else:
+            return 'F'
+
+
 class Lab(models.Model):
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
     due_date = models.DateTimeField()   
     total_points = models.DecimalField(max_digits=5, decimal_places=2)
+    grade_scale = models.ForeignKey(GradeScale, on_delete=models.SET_NULL, null=True, blank=True, 
+                                    related_name='labs', help_text="Grade scale to use for this lab")
     
     def __str__(self):
         return f"ECEN5613 - {self.name}"
@@ -85,19 +162,12 @@ class Lab(models.Model):
         return (score / self.total_points) * Decimal('100')
         
     def get_grade_letter(self, student):
-        """Convert percentage to letter grade."""
+        """Convert percentage to letter grade using the lab's grade scale or default scale."""
         percentage = self.get_student_percentage(student)
         
-        if percentage >= 90:
-            return 'A'
-        elif percentage >= 80:
-            return 'B'
-        elif percentage >= 70:
-            return 'C'
-        elif percentage >= 60:
-            return 'D'
-        else:
-            return 'F'
+        # Use lab's grade scale if available, otherwise use default
+        grade_scale = self.grade_scale if self.grade_scale else GradeScale.get_default_scale()
+        return grade_scale.get_letter_grade(percentage)
 
 class Part(models.Model):
     """Model representing a part of a lab."""
@@ -237,19 +307,12 @@ class Student(models.Model):
         return (earned_points / total_points) * Decimal('100')
         
     def get_course_letter_grade(self):
-        """Get student's overall letter grade."""
+        """Get student's overall letter grade using the default grade scale."""
         percentage = self.get_overall_grade()
         
-        if percentage >= 90:
-            return 'A'
-        elif percentage >= 80:
-            return 'B'
-        elif percentage >= 70:
-            return 'C'
-        elif percentage >= 60:
-            return 'D'
-        else:
-            return 'F'
+        # Use default grade scale
+        grade_scale = GradeScale.get_default_scale()
+        return grade_scale.get_letter_grade(percentage)
 
 class Signoff(models.Model):
     """Model representing a signoff for a student on a lab part."""

@@ -123,7 +123,7 @@
                                 </div>
                                 <p class="grade-summary">
                                     <strong>{{ student_data.earned_points|floatformat:2 }}</strong> / {{ student_data.total_points|floatformat:2 }} points
-                                    <span class="badge bg-primary ms-2">{{ student_data.student.get_course_letter_grade }}</span>
+                                    <span class="badge bg-primary ms-2" title="Using Default Grade Scale">{{ student_data.student.get_course_letter_grade }}</span>
                                 </p>
                             </div>
                         </div>
@@ -163,7 +163,7 @@
                                     </div>
                                     <p>
                                         <strong>{{ lab_data.earned_points|floatformat:2 }}</strong> / {{ lab_data.lab.total_points }} points
-                                        <span class="badge bg-primary ms-2">{{ lab_data.letter_grade|default:"N/A" }}</span>
+                                        <span class="badge bg-primary ms-2" title="Using {% if lab_data.lab.grade_scale %}{{ lab_data.lab.grade_scale.name }}{% else %}Default Grade Scale{% endif %}">{{ lab_data.letter_grade|default:"N/A" }}</span>
                                     </p>
                                 </div>
                             </div>

@@ -965,11 +965,22 @@ def export_lab_csv(request, lab_id):
     lab = get_object_or_404(Lab, pk=lab_id)
     students = Student.objects.filter(active=True).order_by('name')
     
+    # Get grade scale info
+    grade_scale_name = lab.grade_scale.name if lab.grade_scale else "Default Grade Scale"
+    
     # Create CSV response
     response = HttpResponse(content_type='text/csv')
     response['Content-Disposition'] = f'attachment; filename="{lab.name}_grades.csv"'
     
     writer = csv.writer(response)
+    
+    # Write metadata header rows
+    writer.writerow(['Lab', lab.name])
+    writer.writerow(['Description', lab.description])
+    writer.writerow(['Due Date', lab.due_date.strftime('%Y-%m-%d %H:%M')])
+    writer.writerow(['Total Points', str(lab.total_points)])
+    writer.writerow(['Grade Scale', grade_scale_name])
+    writer.writerow([])  # Empty row as separator
     
     # Get all parts for this lab
     parts = lab.parts.all().order_by('order')
@@ -1002,7 +1013,7 @@ def export_lab_csv(request, lab_id):
     header.extend(sorted(all_criteria))
     
     # Add total scores
-    header.extend(['Total Score', 'Percentage', 'Letter Grade'])
+    header.extend(['Total Score', 'Percentage', f'Letter Grade ({grade_scale_name})'])
     
     writer.writerow(header)
     
@@ -1057,6 +1068,33 @@ def export_lab_csv(request, lab_id):
         row.append(lab.get_grade_letter(student))
         
         writer.writerow(row)
+    
+    # Add a separator row
+    writer.writerow([])
+    
+    # Add grade scale information
+    writer.writerow(['Grade Scale Information'])
+    
+    grade_scale = lab.grade_scale if lab.grade_scale else GradeScale.get_default_scale()
+    writer.writerow(['Scale Name', grade_scale.name])
+    writer.writerow(['Description', grade_scale.description])
+    writer.writerow([])
+    
+    # Add grading thresholds
+    writer.writerow(['Grade', 'Threshold (%)'])
+    writer.writerow(['A+', f">= {grade_scale.a_plus_threshold}"])
+    writer.writerow(['A', f">= {grade_scale.a_threshold}"])
+    writer.writerow(['A-', f">= {grade_scale.a_minus_threshold}"])
+    writer.writerow(['B+', f">= {grade_scale.b_plus_threshold}"])
+    writer.writerow(['B', f">= {grade_scale.b_threshold}"])
+    writer.writerow(['B-', f">= {grade_scale.b_minus_threshold}"])
+    writer.writerow(['C+', f">= {grade_scale.c_plus_threshold}"])
+    writer.writerow(['C', f">= {grade_scale.c_threshold}"])
+    writer.writerow(['C-', f">= {grade_scale.c_minus_threshold}"])
+    writer.writerow(['D+', f">= {grade_scale.d_plus_threshold}"])
+    writer.writerow(['D', f">= {grade_scale.d_threshold}"])
+    writer.writerow(['D-', f">= {grade_scale.d_minus_threshold}"])
+    writer.writerow(['F', f"< {grade_scale.d_minus_threshold}"])
     
     return response
 
@@ -1220,7 +1258,9 @@ def export_student_grade_csv(request, student_id=None):
     # Add lab and part status columns
     for lab in labs:
         parts = lab_parts[lab.id]
-        header.append(f"{lab.name} - Grade")
+        # Include grade scale information
+        grade_scale_name = lab.grade_scale.name if lab.grade_scale else "Default"
+        header.append(f"{lab.name} - Grade ({grade_scale_name})")
         header.append(f"{lab.name} - Percentage")
         
         for part in parts:
@@ -1235,9 +1275,10 @@ def export_student_grade_csv(request, student_id=None):
         header.append(f"{lab_name} - {part_name} - Rubric: {criteria_name}")
     
     # Add overall score
+    default_scale = GradeScale.get_default_scale()
     header.append('Overall Score')
     header.append('Overall Percentage')
-    header.append('Overall Grade')
+    header.append(f'Overall Grade ({default_scale.name})')
     
     writer.writerow(header)
     
