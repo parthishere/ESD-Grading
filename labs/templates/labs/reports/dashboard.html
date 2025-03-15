@@ -157,22 +157,26 @@
     <!-- Grade Distribution Chart -->
     <div class="row mt-4">
         <div class="col-md-6">
-            <div class="card">
+            <div class="card h-100">
                 <div class="card-header bg-light">
                     <h4 class="mb-0">Grade Distribution</h4>
                 </div>
                 <div class="card-body">
-                    <canvas id="gradeDistributionChart" height="200"></canvas>
+                    <div style="height: 300px; position: relative;">
+                        <canvas id="gradeDistributionChart"></canvas>
+                    </div>
                 </div>
             </div>
         </div>
         <div class="col-md-6">
-            <div class="card">
+            <div class="card h-100">
                 <div class="card-header bg-light">
                     <h4 class="mb-0">Challenge Completion</h4>
                 </div>
                 <div class="card-body">
-                    <canvas id="challengeCompletionChart" height="200"></canvas>
+                    <div style="height: 300px; position: relative;">
+                        <canvas id="challengeCompletionChart"></canvas>
+                    </div>
                 </div>
             </div>
         </div>
@@ -192,8 +196,14 @@
         
         // Fetch summary stats via AJAX
         fetch('{% url "labs:quick_stats" %}')
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! Status: ${response.status}`);
+                }
+                return response.json();
+            })
             .then(data => {
+                console.log('Received stats data:', data);
                 document.getElementById('signoff-count').textContent = data.total_signoffs;
                 document.getElementById('completion-rate').textContent = data.avg_completion + '%';
                 
@@ -201,30 +211,41 @@
                 document.getElementById('challenge-count').textContent = data.completed_challenges + '/' + data.total_challenges;
                 document.getElementById('challenge-completion').textContent = data.challenge_completion + '%';
                 document.getElementById('exceeds-requirements').textContent = data.exceeds_requirements;
+                
+                // Update grade distribution chart
+                if (data.grade_distribution) {
+                    console.log('Grade distribution data:', data.grade_distribution);
+                    const grades = ['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D+', 'D', 'D-', 'F'];
+                    const gradeCounts = grades.map(grade => data.grade_distribution[grade] || 0);
+                    
+                    // Update chart data
+                    gradeChart.data.datasets[0].data = gradeCounts;
+                    gradeChart.update();
+                }
+                
+                // Update challenge completion chart
+                if (data.challenge_completion_by_student) {
+                    console.log('Challenge completion data:', data.challenge_completion_by_student);
+                    const challengeData = [
+                        data.challenge_completion_by_student.not_attempted || 0,
+                        data.challenge_completion_by_student.low || 0,
+                        data.challenge_completion_by_student.medium || 0,
+                        data.challenge_completion_by_student.high || 0,
+                        data.challenge_completion_by_student.complete || 0
+                    ];
+                    
+                    // Update chart data with fallback to 0 for missing values
+                    challengeChart.data.datasets[0].data = challengeData;
+                    challengeChart.update();
+                }
             })
             .catch(error => {
                 console.error('Error fetching stats:', error);
             });
             
-        // Grade Distribution Chart
+        // Grade Distribution Chart - initialize with empty data that will be filled from API
         const grades = ['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D+', 'D', 'D-', 'F'];
-        const gradeData = [
-            {% for student in students %}
-                '{{ student.get_course_letter_grade }}',
-            {% endfor %}
-        ];
-        
-        // Count occurrences of each grade
-        const gradeCounts = {};
-        grades.forEach(grade => {
-            gradeCounts[grade] = 0;
-        });
-        
-        gradeData.forEach(grade => {
-            if (grade in gradeCounts) {
-                gradeCounts[grade]++;
-            }
-        });
+        const initialGradeCounts = Array(grades.length).fill(0);
         
         // Create the grade distribution chart
         const gradeCtx = document.getElementById('gradeDistributionChart').getContext('2d');
@@ -234,7 +255,7 @@
                 labels: grades,
                 datasets: [{
                     label: 'Number of Students',
-                    data: grades.map(grade => gradeCounts[grade]),
+                    data: initialGradeCounts,
                     backgroundColor: [
                         'rgba(75, 192, 192, 0.6)',  // A+ to B
                         'rgba(75, 192, 192, 0.6)',
@@ -270,6 +291,7 @@
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
                 scales: {
                     y: {
                         beginAtZero: true,
@@ -279,54 +301,34 @@
                     }
                 },
                 plugins: {
+                    legend: {
+                        display: false
+                    },
                     title: {
                         display: true,
-                        text: 'Overall Grade Distribution'
+                        text: 'Overall Grade Distribution',
+                        font: {
+                            size: 16
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            title: function(tooltipItems) {
+                                return 'Grade: ' + tooltipItems[0].label;
+                            },
+                            label: function(context) {
+                                return context.raw + ' students';
+                            }
+                        }
                     }
                 }
             }
         });
         
-        // Create the challenge completion chart
+        // Create the challenge completion chart with empty data that will be filled from API
         const challengeCtx = document.getElementById('challengeCompletionChart').getContext('2d');
         const challengeLabels = ['Not Attempted', '< 50%', '50-75%', '75-90%', '> 90%'];
-        const challengeData = [0, 0, 0, 0, 0]; // Populated based on challenge data below
-        
-        // Calculate challenge completion percentages for all students
-        {% for student in students %}
-            let totalChallengePoints = 0;
-            let earnedChallengePoints = 0;
-            {% for lab in labs %}
-                {% for part in lab.parts.all %}
-                    {% if part.has_challenges %}
-                        {% for challenge in part.challenges.all %}
-                            totalChallengePoints += {{ challenge.max_points }};
-                            // Try to find a score for this student
-                            {% for score in challenge.scores.all %}
-                                {% if score.signoff.student.id == student.id %}
-                                    earnedChallengePoints += {{ score.score }};
-                                {% endif %}
-                            {% endfor %}
-                        {% endfor %}
-                    {% endif %}
-                {% endfor %}
-            {% endfor %}
-            
-            if (totalChallengePoints > 0) {
-                const completionPercentage = (earnedChallengePoints / totalChallengePoints) * 100;
-                if (completionPercentage === 0) {
-                    challengeData[0]++; // Not attempted
-                } else if (completionPercentage < 50) {
-                    challengeData[1]++; // < 50%
-                } else if (completionPercentage < 75) {
-                    challengeData[2]++; // 50-75%
-                } else if (completionPercentage < 90) {
-                    challengeData[3]++; // 75-90%
-                } else {
-                    challengeData[4]++; // > 90%
-                }
-            }
-        {% endfor %}
+        const challengeData = [0, 0, 0, 0, 0]; // Initial empty data
         
         const challengeChart = new Chart(challengeCtx, {
             type: 'bar',
@@ -354,6 +356,7 @@
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
                 scales: {
                     y: {
                         beginAtZero: true,
@@ -363,9 +366,25 @@
                     }
                 },
                 plugins: {
+                    legend: {
+                        display: false
+                    },
                     title: {
                         display: true,
-                        text: 'Challenge Completion Distribution'
+                        text: 'Challenge Completion Distribution',
+                        font: {
+                            size: 16
+                        }
+                    },
+                    tooltip: {
+                        callbacks: {
+                            title: function(tooltipItems) {
+                                return tooltipItems[0].label;
+                            },
+                            label: function(context) {
+                                return context.raw + ' students';
+                            }
+                        }
                     }
                 }
             }
