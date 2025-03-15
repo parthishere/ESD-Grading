@@ -725,7 +725,7 @@ class EvaluationSheet(models.Model):
         ('MR', 'Meets Requirements'),
         ('MM', 'Mostly Meets Requirements'),
         ('IR', 'Improvement Required'),
-        ('ND', 'Not Demonstrated')
+        ('ND', 'Not Done')
     )
     
     # Map status to score percentage
@@ -797,5 +797,5 @@ class EvaluationSheet(models.Model):
     def get_criterion_display(self, criterion):
         """Get display name for a criterion's status."""
         status = self.evaluations.get(criterion, 'ND')
-        return dict(self.STATUS_CHOICES).get(status, 'Not Demonstrated')
+        return dict(self.STATUS_CHOICES).get(status, 'Not Done')
     

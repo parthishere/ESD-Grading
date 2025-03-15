@@ -510,7 +510,7 @@ document.addEventListener("DOMContentLoaded", function () {
       { value: "MR", label: "Meets Requirements" },
       { value: "MM", label: "Mostly Meets Requirements" },
       { value: "IR", label: "Improvement Required" },
-      { value: "ND", label: "Not Demonstrated" },
+      { value: "ND", label: "Not Done" },
     ];
 
     // Add a separator row
