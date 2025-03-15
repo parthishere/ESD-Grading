@@ -1,0 +1,327 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Lab Details - {{ lab.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .progress {
+        height: 1.2rem;
+    }
+    .part-card {
+        transition: all 0.3s ease;
+    }
+    .part-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    .part-status {
+        width: 12px;
+        height: 12px;
+        display: inline-block;
+        border-radius: 50%;
+        margin-right: 0.5rem;
+    }
+    .status-approved {
+        background-color: #28a745;
+    }
+    .status-rejected {
+        background-color: #dc3545;
+    }
+    .status-pending {
+        background-color: #ffc107;
+    }
+    .status-not-started {
+        background-color: #6c757d;
+    }
+    .student-row:hover {
+        background-color: rgba(0,0,0,0.05);
+    }
+    .student-stats {
+        font-size: 0.9rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <!-- Lab Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h1><i class="fas fa-flask me-2"></i>{{ lab.name }}</h1>
+                <div>
+                    <a href="{% url 'labs:lab_list' %}" class="btn btn-outline-primary">
+                        <i class="fas fa-arrow-left me-1"></i> Back to Lab List
+                    </a>
+                    <a href="{% url 'labs:lab_report' lab.id %}" class="btn btn-primary ms-2">
+                        <i class="fas fa-chart-bar me-1"></i> Lab Report
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-4 mb-4 mb-md-0">
+            <div class="card h-100">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="h5 mb-0"><i class="fas fa-info-circle me-2"></i>Lab Information</h3>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex flex-column">
+                        <p class="mb-3">
+                            <strong>Due Date:</strong><br> 
+                            {{ lab.due_date|date:"F d, Y H:i" }}
+                        </p>
+                        <p class="mb-3">
+                            <strong>Total Points:</strong><br>
+                            {{ lab.total_points }}
+                        </p>
+                        <p class="mb-3">
+                            <strong>Number of Parts:</strong><br>
+                            {{ lab.parts.count }}
+                        </p>
+                        {% if lab.description %}
+                        <div class="mb-0">
+                            <strong>Description:</strong><br>
+                            {{ lab.description|linebreaks }}
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-8">
+            <div class="card h-100">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="h5 mb-0"><i class="fas fa-chart-pie me-2"></i>Lab Overview</h3>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <h5>Completion Rate</h5>
+                            <div class="progress mb-2">
+                                <div class="progress-bar {% if completion_percentage >= 90 %}bg-success{% elif completion_percentage >= 70 %}bg-info{% elif completion_percentage >= 50 %}bg-warning{% else %}bg-danger{% endif %}" 
+                                     role="progressbar" 
+                                     style="width: {{ completion_percentage }}%;" 
+                                     aria-valuenow="{{ completion_percentage }}" 
+                                     aria-valuemin="0" 
+                                     aria-valuemax="100">
+                                    {{ completion_percentage|floatformat:1 }}%
+                                </div>
+                            </div>
+                            <p class="text-muted small">{{ approved_signoffs }} out of {{ total_required_signoffs }} required signoffs completed</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h5>Average Score</h5>
+                            <div class="progress mb-2">
+                                <div class="progress-bar {% if avg_score >= 90 %}bg-success{% elif avg_score >= 80 %}bg-primary{% elif avg_score >= 70 %}bg-info{% elif avg_score >= 60 %}bg-warning{% else %}bg-danger{% endif %}" 
+                                     role="progressbar" 
+                                     style="width: {{ avg_score }}%;" 
+                                     aria-valuenow="{{ avg_score }}" 
+                                     aria-valuemin="0" 
+                                     aria-valuemax="100">
+                                    {{ avg_score|floatformat:1 }}%
+                                </div>
+                            </div>
+                            <p class="text-muted small">Average score: {{ avg_points|floatformat:2 }} out of {{ lab.total_points }} points</p>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h5>Completion Status</h5>
+                            <div class="d-flex justify-content-between mb-3">
+                                <div>
+                                    <span class="badge bg-success">Completed</span> 
+                                </div>
+                                <div>{{ completed_students }} students</div>
+                            </div>
+                            <div class="d-flex justify-content-between mb-3">
+                                <div>
+                                    <span class="badge bg-warning">In Progress</span> 
+                                </div>
+                                <div>{{ in_progress_students }} students</div>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <span class="badge bg-secondary">Not Started</span>
+                                </div>
+                                <div>{{ not_started_students }} students</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <h5>Grade Distribution</h5>
+                            <div class="d-flex justify-content-between mb-2">
+                                <div>A (90-100%)</div>
+                                <div>{{ a_grade_count }} students</div>
+                            </div>
+                            <div class="d-flex justify-content-between mb-2">
+                                <div>B (80-89%)</div>
+                                <div>{{ b_grade_count }} students</div>
+                            </div>
+                            <div class="d-flex justify-content-between mb-2">
+                                <div>C (70-79%)</div>
+                                <div>{{ c_grade_count }} students</div>
+                            </div>
+                            <div class="d-flex justify-content-between mb-2">
+                                <div>D (60-69%)</div>
+                                <div>{{ d_grade_count }} students</div>
+                            </div>
+                            <div class="d-flex justify-content-between">
+                                <div>F (0-59%)</div>
+                                <div>{{ f_grade_count }} students</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Parts Section -->
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h3 class="h5 mb-0"><i class="fas fa-puzzle-piece me-2"></i>Lab Parts</h3>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                {% for part in lab.parts.all %}
+                <div class="col-md-6 col-lg-4 mb-4">
+                    <div class="card h-100 part-card">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Part {{ forloop.counter }}: {{ part.name }}</h5>
+                            {% if part.is_required %}
+                            <span class="badge bg-info">Required</span>
+                            {% else %}
+                            <span class="badge bg-secondary">Optional</span>
+                            {% endif %}
+                        </div>
+                        <div class="card-body">
+                            {% if part.description %}
+                            <p class="small">{{ part.description|truncatechars:100 }}</p>
+                            <hr>
+                            {% endif %}
+                            
+                            <div class="mb-3">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <h6 class="mb-0">Completion:</h6>
+                                    <span>{{ part.completion_percentage|floatformat:1 }}%</span>
+                                </div>
+                                <div class="progress mb-3">
+                                    <div class="progress-bar {% if part.completion_percentage >= 90 %}bg-success{% elif part.completion_percentage >= 70 %}bg-info{% elif part.completion_percentage >= 50 %}bg-warning{% else %}bg-danger{% endif %}" 
+                                         role="progressbar" 
+                                         style="width: {{ part.completion_percentage }}%;" 
+                                         aria-valuenow="{{ part.completion_percentage }}" 
+                                         aria-valuemin="0" 
+                                         aria-valuemax="100">
+                                    </div>
+                                </div>
+                                <p class="text-muted small">{{ part.approved_count }} of {{ total_students }} students completed</p>
+                            </div>
+                            
+                            <div class="d-grid gap-2">
+                                <a href="{% url 'labs:part_detail' part.id %}" class="btn btn-primary btn-sm">
+                                    <i class="fas fa-eye me-1"></i> View Details
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Students Section -->
+    <div class="card">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <h3 class="h5 mb-0"><i class="fas fa-users me-2"></i>Student Progress</h3>
+            {% if filtered_student %}
+            <span class="badge bg-light text-dark">Filtered: {{ filtered_student.name }}</span>
+            {% endif %}
+        </div>
+        <div class="card-body">
+            {% if filtered_student %}
+            <div class="mb-3">
+                <a href="{% url 'labs:lab_detail' lab.id %}" class="btn btn-sm btn-outline-primary">
+                    <i class="fas fa-times me-1"></i> Clear Filter
+                </a>
+            </div>
+            {% endif %}
+            
+            {% if student_progress %}
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Student</th>
+                            <th>ID</th>
+                            <th>Status</th>
+                            <th>Score</th>
+                            <th>Last Activity</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for progress in student_progress %}
+                        <tr class="student-row">
+                            <td>
+                                <a href="{% url 'labs:student_detail' progress.student.id %}">
+                                    {{ progress.student.name }}
+                                </a>
+                            </td>
+                            <td>{{ progress.student.student_id }}</td>
+                            <td>
+                                {% if progress.status == 'completed' %}
+                                <span class="badge bg-success">Completed</span>
+                                {% elif progress.status == 'in_progress' %}
+                                <span class="badge bg-warning">In Progress</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Not Started</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="d-flex align-items-center">
+                                    <div class="progress me-2" style="width: 100px;">
+                                        <div class="progress-bar {% if progress.percentage >= 90 %}bg-success{% elif progress.percentage >= 80 %}bg-primary{% elif progress.percentage >= 70 %}bg-info{% elif progress.percentage >= 60 %}bg-warning{% else %}bg-danger{% endif %}" 
+                                             role="progressbar" 
+                                             style="width: {{ progress.percentage }}%;" 
+                                             aria-valuenow="{{ progress.percentage }}" 
+                                             aria-valuemin="0" 
+                                             aria-valuemax="100">
+                                        </div>
+                                    </div>
+                                    <span>{{ progress.percentage|floatformat:1 }}%</span>
+                                </div>
+                            </td>
+                            <td>{{ progress.last_activity|date:"M d, Y H:i"|default:"N/A" }}</td>
+                            <td>
+                                <div class="btn-group">
+                                    <a href="{% url 'labs:student_detail' progress.student.id %}" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-user"></i>
+                                    </a>
+                                    <a href="{% url 'labs:student_grade_report' progress.student.id %}" class="btn btn-sm btn-outline-info">
+                                        <i class="fas fa-chart-bar"></i>
+                                    </a>
+                                    <a href="{% url 'labs:home' %}?student_id={{ progress.student.student_id }}&lab_id={{ lab.id }}" class="btn btn-sm btn-outline-success">
+                                        <i class="fas fa-clipboard-check"></i>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle me-2"></i> No student progress data available for this lab.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

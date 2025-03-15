@@ -1,0 +1,240 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Student Details - {{ student.name }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .student-header {
+        background-color: #f8f9fa;
+        border-radius: 0.25rem;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    .progress {
+        height: 1.5rem;
+    }
+    .lab-card {
+        transition: all 0.3s ease;
+    }
+    .lab-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    .badge-large {
+        font-size: 1rem;
+        padding: 0.5rem 0.75rem;
+    }
+    .part-status {
+        width: 1rem;
+        height: 1rem;
+        display: inline-block;
+        border-radius: 50%;
+        margin-right: 0.5rem;
+    }
+    .status-approved {
+        background-color: #28a745;
+    }
+    .status-rejected {
+        background-color: #dc3545;
+    }
+    .status-pending {
+        background-color: #ffc107;
+    }
+    .status-not-started {
+        background-color: #6c757d;
+    }
+    .nav-tabs .nav-link {
+        font-weight: 500;
+    }
+    .tab-pane {
+        padding: 1.5rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <!-- Student Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h1><i class="fas fa-user-graduate me-2"></i>{{ student.name }}</h1>
+                <div>
+                    <a href="{% url 'labs:student_list' %}" class="btn btn-outline-primary">
+                        <i class="fas fa-arrow-left me-1"></i> Back to Student List
+                    </a>
+                    <a href="{% url 'labs:student_grade_report' student.id %}" class="btn btn-primary ms-2">
+                        <i class="fas fa-file-alt me-1"></i> Grade Report
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-4 mb-4 mb-md-0">
+            <div class="card h-100">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="h5 mb-0"><i class="fas fa-id-card me-2"></i>Student Information</h3>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex flex-column">
+                        <p class="mb-2">
+                            <strong>Student ID:</strong> {{ student.student_id }}
+                        </p>
+                        <p class="mb-2">
+                            <strong>Email:</strong> {{ student.email|default:"Not provided" }}
+                        </p>
+                        <p class="mb-2">
+                            <strong>Batch:</strong> {{ student.batch|date:"F d, Y" }}
+                        </p>
+                        <p class="mb-2">
+                            <strong>Status:</strong> 
+                            {% if student.active %}
+                            <span class="badge bg-success">Active</span>
+                            {% else %}
+                            <span class="badge bg-danger">Inactive</span>
+                            {% endif %}
+                        </p>
+                        <p class="mb-0">
+                            <a href="#" class="btn btn-sm btn-outline-secondary mt-3" 
+                               onclick="toggleStudentStatus({{ student.id }}, '{{ student.active|yesno:'Deactivate,Activate' }}')">
+                                <i class="fas fa-toggle-{% if student.active %}on{% else %}off{% endif %} me-1"></i>
+                                {{ student.active|yesno:"Deactivate,Activate" }} Student
+                            </a>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-8">
+            <div class="card h-100">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="h5 mb-0"><i class="fas fa-chart-pie me-2"></i>Overall Progress</h3>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <h5>Completion Status</h5>
+                            <div class="progress mb-2">
+                                <div class="progress-bar {% if student.get_completion_status >= 90 %}bg-success{% elif student.get_completion_status >= 70 %}bg-info{% elif student.get_completion_status >= 50 %}bg-warning{% else %}bg-danger{% endif %}" 
+                                     role="progressbar" 
+                                     style="width: {{ student.get_completion_status }}%;" 
+                                     aria-valuenow="{{ student.get_completion_status }}" 
+                                     aria-valuemin="0" 
+                                     aria-valuemax="100">
+                                    {{ student.get_completion_status|floatformat:1 }}%
+                                </div>
+                            </div>
+                            <p class="text-muted small">{{ completed_parts_count }} out of {{ total_parts_count }} required parts completed</p>
+                        </div>
+                        <div class="col-md-6">
+                            <h5>Grade</h5>
+                            <div class="d-flex align-items-center">
+                                <div class="me-3">
+                                    <span class="badge badge-large {% if student.get_overall_grade >= 90 %}bg-success{% elif student.get_overall_grade >= 80 %}bg-primary{% elif student.get_overall_grade >= 70 %}bg-info{% elif student.get_overall_grade >= 60 %}bg-warning{% else %}bg-danger{% endif %}">
+                                        {{ student.get_course_letter_grade }}
+                                    </span>
+                                </div>
+                                <div class="flex-grow-1">
+                                    <div class="progress mb-2">
+                                        <div class="progress-bar {% if student.get_overall_grade >= 90 %}bg-success{% elif student.get_overall_grade >= 80 %}bg-primary{% elif student.get_overall_grade >= 70 %}bg-info{% elif student.get_overall_grade >= 60 %}bg-warning{% else %}bg-danger{% endif %}" 
+                                             role="progressbar" 
+                                             style="width: {{ student.get_overall_grade }}%;" 
+                                             aria-valuenow="{{ student.get_overall_grade }}" 
+                                             aria-valuemin="0" 
+                                             aria-valuemax="100">
+                                            {{ student.get_overall_grade|floatformat:1 }}%
+                                        </div>
+                                    </div>
+                                    <p class="text-muted small">{{ earned_points|floatformat:2 }} out of {{ total_points|floatformat:2 }} points earned</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-12">
+                            <h5>Recent Activity</h5>
+                            {% if recent_signoffs %}
+                            <div class="list-group small">
+                                {% for signoff in recent_signoffs %}
+                                <a href="{% url 'labs:signoff_detail' signoff.id %}" class="list-group-item list-group-item-action">
+                                    <div class="d-flex w-100 justify-content-between">
+                                        <strong>{{ signoff.part.lab.name }} - {{ signoff.part.name }}</strong>
+                                        <span class="text-muted">{{ signoff.date_updated|date:"M d, Y" }}</span>
+                                    </div>
+                                    <div class="d-flex align-items-center">
+                                        <span class="badge bg-{{ signoff.status|cut:" "|lower }}">{{ signoff.status }}</span>
+                                        {% if signoff.comments %}
+                                        <span class="ms-2 text-muted small">{{ signoff.comments|truncatechars:50 }}</span>
+                                        {% endif %}
+                                    </div>
+                                </a>
+                                {% endfor %}
+                            </div>
+                            {% else %}
+                            <p class="text-muted">No recent activity for this student.</p>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Labs Tab Section -->
+    <div class="card">
+        <div class="card-header bg-primary text-white">
+            <h3 class="h5 mb-0"><i class="fas fa-flask me-2"></i>Labs</h3>
+        </div>
+        <div class="card-body">
+            <ul class="nav nav-tabs" id="labsTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="all-labs-tab" data-bs-toggle="tab" data-bs-target="#all-labs-content" type="button" role="tab" aria-controls="all-labs-content" aria-selected="true">
+                        <i class="fas fa-th-list me-1"></i>All Labs
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="completed-labs-tab" data-bs-toggle="tab" data-bs-target="#completed-labs-content" type="button" role="tab" aria-controls="completed-labs-content" aria-selected="false">
+                        <i class="fas fa-check-circle me-1"></i>Completed
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="in-progress-labs-tab" data-bs-toggle="tab" data-bs-target="#in-progress-labs-content" type="button" role="tab" aria-controls="in-progress-labs-content" aria-selected="false">
+                        <i class="fas fa-spinner me-1"></i>In Progress
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="not-started-labs-tab" data-bs-toggle="tab" data-bs-target="#not-started-labs-content" type="button" role="tab" aria-controls="not-started-labs-content" aria-selected="false">
+                        <i class="fas fa-clock me-1"></i>Not Started
+                    </button>
+                </li>
+            </ul>
+            <div class="tab-content" id="labsTabsContent">
+                <div class="tab-pane fade show active" id="all-labs-content" role="tabpanel" aria-labelledby="all-labs-tab">
+                    {% include "labs/partials/lab_progress_list.html" with labs=labs student=student %}
+                </div>
+                <div class="tab-pane fade" id="completed-labs-content" role="tabpanel" aria-labelledby="completed-labs-tab">
+                    {% include "labs/partials/lab_progress_list.html" with labs=completed_labs student=student %}
+                </div>
+                <div class="tab-pane fade" id="in-progress-labs-content" role="tabpanel" aria-labelledby="in-progress-labs-tab">
+                    {% include "labs/partials/lab_progress_list.html" with labs=in_progress_labs student=student %}
+                </div>
+                <div class="tab-pane fade" id="not-started-labs-content" role="tabpanel" aria-labelledby="not-started-labs-tab">
+                    {% include "labs/partials/lab_progress_list.html" with labs=not_started_labs student=student %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function toggleStudentStatus(studentId, action) {
+    if (confirm(`Are you sure you want to ${action.toLowerCase()} this student?`)) {
+        window.location.href = `/student/toggle-active/${studentId}/`;
+    }
+}
+</script>
+{% endblock %}

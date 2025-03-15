@@ -138,6 +138,17 @@ class Part(models.Model):
             
         return (self.get_student_score(student) / max_score) * 100
         
+    def get_part_status(self, student=None):
+        """Get status of a part for a student."""
+        if not student:
+            return "not_started"
+            
+        try:
+            signoff = Signoff.objects.get(part=self, student=student)
+            return signoff.status
+        except Signoff.DoesNotExist:
+            return "not_started"
+        
     def get_contribution_to_lab(self):
         """Calculate how many points this part contributes to the overall lab grade."""
         # Get count of parts in this lab
@@ -265,20 +276,42 @@ class Signoff(models.Model):
     def get_total_quality_score(self):
         """Get the total score based on quality criteria."""
         scores = self.quality_scores.all()
-        if not scores:
-            return Decimal('0')
+        quality_score = Decimal('0')
         
-        # Sum up all quality scores
-        return sum(Decimal(str(score.score)) for score in scores)
+        if scores:
+            # Sum up all quality scores
+            quality_score = sum(Decimal(str(score.score)) for score in scores)
+        
+        # Check if there's an evaluation sheet, and add its score if present
+        try:
+            evaluation = self.evaluation_sheet.first()
+            if evaluation:
+                # Add evaluation sheet score to quality score
+                return quality_score + evaluation.get_earned_marks()
+        except:
+            pass
+            
+        return quality_score
     
     def get_max_quality_score(self):
         """Get the maximum possible score based on quality criteria."""
         criteria = QualityCriteria.objects.filter(part=self.part)
-        if not criteria:
-            return Decimal('0')
+        max_quality_score = Decimal('0')
         
-        # Sum up maximum points for all criteria
-        return sum(Decimal(str(c.max_points)) for c in criteria)
+        if criteria:
+            # Sum up maximum points for all criteria
+            max_quality_score = sum(Decimal(str(c.max_points)) for c in criteria)
+        
+        # Check if there's an evaluation sheet, and add its max score if present
+        try:
+            evaluation = self.evaluation_sheet.first()
+            if evaluation:
+                # Add evaluation sheet max score
+                return max_quality_score + evaluation.get_total_max_marks()
+        except:
+            pass
+            
+        return max_quality_score
     
     def get_quality_percentage(self):
         """Get the quality score as a percentage."""
@@ -340,4 +373,87 @@ class QualityScore(models.Model):
         if self.criteria.max_points == 0:
             return 0
         return (self.score / self.criteria.max_points) * 100
+    
+
+class EvaluationSheet(models.Model):
+    STATUS_CHOICES = (
+        ('ER', 'Exceeds Requirements'),
+        ('MR', 'Meets Requirements'),
+        ('MM', 'Minimally Meets'),
+        ('IR', 'Improvement Required'),
+        ('ND', 'Not Demonstrated')
+    )
+    
+    # Map status to score percentage
+    STATUS_TO_SCORE = {
+        'ER': 1.0,    # 100% of max marks
+        'MR': 0.85,   # 85% of max marks
+        'MM': 0.70,   # 70% of max marks
+        'IR': 0.50,   # 50% of max marks
+        'ND': 0.0     # 0% of max marks
+    }
+    
+    signoff = models.ForeignKey(Signoff, on_delete=models.CASCADE, related_name='evaluation_sheet')
+    
+    # Fields with their max marks
+    cleanliness = models.CharField(max_length=2, choices=STATUS_CHOICES)
+    cleanliness_max_marks = models.DecimalField(max_digits=5, decimal_places=2, default=5.0)
+    
+    hardware = models.CharField(max_length=2, choices=STATUS_CHOICES)
+    hardware_max_marks = models.DecimalField(max_digits=5, decimal_places=2, default=10.0)
+    
+    timeliness = models.CharField(max_length=2, choices=STATUS_CHOICES)
+    timeliness_max_marks = models.DecimalField(max_digits=5, decimal_places=2, default=5.0)
+    
+    student_preparation = models.CharField(max_length=2, choices=STATUS_CHOICES)
+    student_preparation_max_marks = models.DecimalField(max_digits=5, decimal_places=2, default=10.0)
+    
+    code_implementation = models.CharField(max_length=2, choices=STATUS_CHOICES)
+    code_implementation_max_marks = models.DecimalField(max_digits=5, decimal_places=2, default=15.0)
+    
+    commenting = models.CharField(max_length=2, choices=STATUS_CHOICES)
+    commenting_max_marks = models.DecimalField(max_digits=5, decimal_places=2, default=5.0)
+    
+    schematic = models.CharField(max_length=2, choices=STATUS_CHOICES)
+    schematic_max_marks = models.DecimalField(max_digits=5, decimal_places=2, default=10.0)
+    
+    course_participation = models.CharField(max_length=2, choices=STATUS_CHOICES)
+    course_participation_max_marks = models.DecimalField(max_digits=5, decimal_places=2, default=5.0)
+    
+    def get_total_max_marks(self):
+        """Get total maximum possible marks for this evaluation sheet."""
+        return (
+            self.cleanliness_max_marks +
+            self.hardware_max_marks +
+            self.timeliness_max_marks +
+            self.student_preparation_max_marks +
+            self.code_implementation_max_marks +
+            self.commenting_max_marks +
+            self.schematic_max_marks +
+            self.course_participation_max_marks
+        )
+    
+    def get_earned_marks(self):
+        """Calculate total marks earned based on status of each field."""
+        total_earned = Decimal('0')
+        
+        # Calculate for each field
+        total_earned += self.cleanliness_max_marks * Decimal(str(self.STATUS_TO_SCORE.get(self.cleanliness, 0)))
+        total_earned += self.hardware_max_marks * Decimal(str(self.STATUS_TO_SCORE.get(self.hardware, 0)))
+        total_earned += self.timeliness_max_marks * Decimal(str(self.STATUS_TO_SCORE.get(self.timeliness, 0)))
+        total_earned += self.student_preparation_max_marks * Decimal(str(self.STATUS_TO_SCORE.get(self.student_preparation, 0)))
+        total_earned += self.code_implementation_max_marks * Decimal(str(self.STATUS_TO_SCORE.get(self.code_implementation, 0)))
+        total_earned += self.commenting_max_marks * Decimal(str(self.STATUS_TO_SCORE.get(self.commenting, 0)))
+        total_earned += self.schematic_max_marks * Decimal(str(self.STATUS_TO_SCORE.get(self.schematic, 0)))
+        total_earned += self.course_participation_max_marks * Decimal(str(self.STATUS_TO_SCORE.get(self.course_participation, 0)))
+        
+        return total_earned
+    
+    def get_percentage(self):
+        """Get percentage of marks earned."""
+        max_marks = self.get_total_max_marks()
+        if max_marks == 0:
+            return Decimal('0')
+        
+        return (self.get_earned_marks() / max_marks) * Decimal('100')
     

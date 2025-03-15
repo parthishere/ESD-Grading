@@ -1,25 +1,26 @@
 from django.shortcuts import render, get_object_or_404
-from django.http import JsonResponse, HttpResponseForbidden
+from django.http import JsonResponse, HttpResponseForbidden, HttpResponseRedirect
 from .models import *
 from .forms import StudentUploadForm, UserRoleForm
 from django.shortcuts import render, redirect, reverse
 from django.contrib import messages
 from django.contrib.auth.decorators import user_passes_test, login_required
-from django.db.models import Count, Avg, Sum, F, Q, Case, When, Value
+from django.db.models import Count, Avg, Sum, F, Q, Case, When, Value, IntegerField
 import datetime
+from decimal import Decimal
 import pandas as pd
 from io import BytesIO
 from django.contrib.auth.models import User
 from django.core.exceptions import PermissionDenied
+from django.urls import reverse
+from django.db.models.functions import Coalesce
 
 # Define role check decorators
 def instructor_required(function):
     """Decorator to check if user is an instructor."""
     def wrap(request, *args, **kwargs):
         try:
-            print("heheheh")
-            print(request.user.groups)
-            if request.user.is_superuser:
+            if hasattr(request.user, 'role') and request.user.role.role in ['instructor']:
                 return function(request, *args, **kwargs)
             else:
                 raise PermissionDenied("You must be an instructor to access this page.")
@@ -372,8 +373,8 @@ def student_grade_report(request, student_id=None):
                     
                     # Calculate quality scores
                     quality_scores = []
-                    part_points = 0
-                    max_part_points = 0
+                    quality_points = 0
+                    quality_max_points = 0
                     
                     for criteria in QualityCriteria.objects.filter(part=part):
                         try:
@@ -388,8 +389,8 @@ def student_grade_report(request, student_id=None):
                                 'max_weighted': max_weighted
                             })
                             
-                            part_points += weighted_score
-                            max_part_points += max_weighted
+                            quality_points += weighted_score
+                            quality_max_points += max_weighted
                         except QualityScore.DoesNotExist:
                             quality_scores.append({
                                 'criteria': criteria,
@@ -397,7 +398,83 @@ def student_grade_report(request, student_id=None):
                                 'weighted_score': 0,
                                 'max_weighted': float(criteria.weight) * float(lab.total_points)
                             })
-                            max_part_points += float(criteria.weight) * float(lab.total_points)
+                            quality_max_points += float(criteria.weight) * float(lab.total_points)
+                    
+                    # Get evaluation sheet data if it exists
+                    evaluation_sheet_data = None
+                    eval_points = 0
+                    eval_max_points = 0
+                    
+                    try:
+                        eval_sheet = EvaluationSheet.objects.get(signoff=signoff)
+                        
+                        # Calculate earned marks for each criterion
+                        cleanliness_earned = float(eval_sheet.cleanliness_max_marks) * float(EvaluationSheet.STATUS_TO_SCORE.get(eval_sheet.cleanliness, 0))
+                        hardware_earned = float(eval_sheet.hardware_max_marks) * float(EvaluationSheet.STATUS_TO_SCORE.get(eval_sheet.hardware, 0))
+                        timeliness_earned = float(eval_sheet.timeliness_max_marks) * float(EvaluationSheet.STATUS_TO_SCORE.get(eval_sheet.timeliness, 0))
+                        student_preparation_earned = float(eval_sheet.student_preparation_max_marks) * float(EvaluationSheet.STATUS_TO_SCORE.get(eval_sheet.student_preparation, 0))
+                        code_implementation_earned = float(eval_sheet.code_implementation_max_marks) * float(EvaluationSheet.STATUS_TO_SCORE.get(eval_sheet.code_implementation, 0))
+                        commenting_earned = float(eval_sheet.commenting_max_marks) * float(EvaluationSheet.STATUS_TO_SCORE.get(eval_sheet.commenting, 0))
+                        schematic_earned = float(eval_sheet.schematic_max_marks) * float(EvaluationSheet.STATUS_TO_SCORE.get(eval_sheet.schematic, 0))
+                        course_participation_earned = float(eval_sheet.course_participation_max_marks) * float(EvaluationSheet.STATUS_TO_SCORE.get(eval_sheet.course_participation, 0))
+                        
+                        # Get status display values
+                        status_dict = dict(EvaluationSheet.STATUS_CHOICES)
+                        
+                        evaluation_sheet_data = {
+                            'cleanliness': eval_sheet.cleanliness,
+                            'cleanliness_display': status_dict.get(eval_sheet.cleanliness, 'Unknown'),
+                            'cleanliness_max_marks': float(eval_sheet.cleanliness_max_marks),
+                            'cleanliness_earned': cleanliness_earned,
+                            
+                            'hardware': eval_sheet.hardware,
+                            'hardware_display': status_dict.get(eval_sheet.hardware, 'Unknown'),
+                            'hardware_max_marks': float(eval_sheet.hardware_max_marks),
+                            'hardware_earned': hardware_earned,
+                            
+                            'timeliness': eval_sheet.timeliness,
+                            'timeliness_display': status_dict.get(eval_sheet.timeliness, 'Unknown'),
+                            'timeliness_max_marks': float(eval_sheet.timeliness_max_marks),
+                            'timeliness_earned': timeliness_earned,
+                            
+                            'student_preparation': eval_sheet.student_preparation,
+                            'student_preparation_display': status_dict.get(eval_sheet.student_preparation, 'Unknown'),
+                            'student_preparation_max_marks': float(eval_sheet.student_preparation_max_marks),
+                            'student_preparation_earned': student_preparation_earned,
+                            
+                            'code_implementation': eval_sheet.code_implementation,
+                            'code_implementation_display': status_dict.get(eval_sheet.code_implementation, 'Unknown'),
+                            'code_implementation_max_marks': float(eval_sheet.code_implementation_max_marks),
+                            'code_implementation_earned': code_implementation_earned,
+                            
+                            'commenting': eval_sheet.commenting,
+                            'commenting_display': status_dict.get(eval_sheet.commenting, 'Unknown'),
+                            'commenting_max_marks': float(eval_sheet.commenting_max_marks),
+                            'commenting_earned': commenting_earned,
+                            
+                            'schematic': eval_sheet.schematic,
+                            'schematic_display': status_dict.get(eval_sheet.schematic, 'Unknown'),
+                            'schematic_max_marks': float(eval_sheet.schematic_max_marks),
+                            'schematic_earned': schematic_earned,
+                            
+                            'course_participation': eval_sheet.course_participation,
+                            'course_participation_display': status_dict.get(eval_sheet.course_participation, 'Unknown'),
+                            'course_participation_max_marks': float(eval_sheet.course_participation_max_marks),
+                            'course_participation_earned': course_participation_earned,
+                            
+                            'total_earned_marks': float(eval_sheet.get_earned_marks()),
+                            'total_max_marks': float(eval_sheet.get_total_max_marks())
+                        }
+                        
+                        eval_points = evaluation_sheet_data['total_earned_marks']
+                        eval_max_points = evaluation_sheet_data['total_max_marks']
+                        
+                    except EvaluationSheet.DoesNotExist:
+                        pass
+                    
+                    # Calculate total part points including both quality criteria and evaluation sheet
+                    part_points = quality_points + eval_points
+                    max_part_points = quality_max_points + eval_max_points
                     
                 except Signoff.DoesNotExist:
                     status = 'not_started'
@@ -411,6 +488,9 @@ def student_grade_report(request, student_id=None):
                     'part': part,
                     'status': status,
                     'quality_scores': quality_scores,
+                    'quality_earned_points': quality_points if status == 'approved' else 0,
+                    'quality_max_points': quality_max_points,
+                    'evaluation_sheet': evaluation_sheet_data,
                     'earned_points': part_points if status == 'approved' else 0,
                     'max_points': max_part_points,
                     'completion_percentage': (float(part_points) / float(max_part_points) * 100) if max_part_points > 0 and status == 'approved' else 0
@@ -475,6 +555,21 @@ def student_grade_report(request, student_id=None):
                     for quality in part_data['quality_scores']:
                         if quality['score']:
                             writer.writerow(['', '', 'Quality', quality['criteria'].name, f"{quality['score'].score}/{quality['criteria'].max_points}", f"{quality['weighted_score']:.2f}/{quality['max_weighted']:.2f}"])
+                    
+                    # Add evaluation sheet data if available
+                    if part_data['evaluation_sheet']:
+                        eval_sheet = part_data['evaluation_sheet']
+                        writer.writerow(['', '', 'Evaluation Sheet', 'Total Score', f"{eval_sheet['total_earned_marks']:.2f}/{eval_sheet['total_max_marks']:.2f}"])
+                        
+                        # Add evaluation criteria
+                        writer.writerow(['', '', '', 'Cleanliness', eval_sheet['cleanliness_display'], f"{eval_sheet['cleanliness_earned']:.2f}/{eval_sheet['cleanliness_max_marks']:.2f}"])
+                        writer.writerow(['', '', '', 'Hardware', eval_sheet['hardware_display'], f"{eval_sheet['hardware_earned']:.2f}/{eval_sheet['hardware_max_marks']:.2f}"])
+                        writer.writerow(['', '', '', 'Timeliness', eval_sheet['timeliness_display'], f"{eval_sheet['timeliness_earned']:.2f}/{eval_sheet['timeliness_max_marks']:.2f}"])
+                        writer.writerow(['', '', '', 'Student Preparation', eval_sheet['student_preparation_display'], f"{eval_sheet['student_preparation_earned']:.2f}/{eval_sheet['student_preparation_max_marks']:.2f}"])
+                        writer.writerow(['', '', '', 'Code Implementation', eval_sheet['code_implementation_display'], f"{eval_sheet['code_implementation_earned']:.2f}/{eval_sheet['code_implementation_max_marks']:.2f}"])
+                        writer.writerow(['', '', '', 'Commenting', eval_sheet['commenting_display'], f"{eval_sheet['commenting_earned']:.2f}/{eval_sheet['commenting_max_marks']:.2f}"])
+                        writer.writerow(['', '', '', 'Schematic', eval_sheet['schematic_display'], f"{eval_sheet['schematic_earned']:.2f}/{eval_sheet['schematic_max_marks']:.2f}"])
+                        writer.writerow(['', '', '', 'Course Participation', eval_sheet['course_participation_display'], f"{eval_sheet['course_participation_earned']:.2f}/{eval_sheet['course_participation_max_marks']:.2f}"])
             
             writer.writerow([])  # Extra space between students
         
@@ -595,7 +690,9 @@ def get_existing_signoff(request):
     """AJAX view to get existing signoffs for a student and lab."""
     student_id = request.GET.get('student_id', '')
     lab_id = request.GET.get('lab_id', '')
-
+    print("heya")
+    print(student_id)
+    print(lab_id)
     if not student_id or not lab_id:
         return JsonResponse([], safe=False)
     
@@ -688,6 +785,13 @@ def get_signoff_details(request):
         ).order_by('-date_updated').values(
             'status', 'comments', 'date_updated', 'instructor__username'
         )
+        
+        # Get quality scores for this signoff
+        quality_scores = QualityScore.objects.filter(
+            signoff=signoff
+        ).values(
+            'criteria_id', 'score', 'criteria__max_points', 'criteria__name'
+        )
             
         # Prepare response
         response = {
@@ -697,9 +801,57 @@ def get_signoff_details(request):
             'comments': signoff.comments,
             'date_updated': signoff.date_updated.isoformat(),
             'overall_score': 2,  # Default to "Meets Requirements"
-            'quality_scores': [],
-            'history': list(history)
+            'quality_scores': list(quality_scores),
+            'history': list(history),
+            'has_evaluation_sheet': False,
+            'evaluation_sheet': {}
         }
+        
+        # Get evaluation sheet if it exists
+        try:
+            evaluation_sheet = EvaluationSheet.objects.get(signoff=signoff)
+            
+            # Add evaluation sheet data to response
+            response['has_evaluation_sheet'] = True
+            response['evaluation_sheet'] = {
+                'cleanliness': {
+                    'value': evaluation_sheet.cleanliness,
+                    'max_marks': float(evaluation_sheet.cleanliness_max_marks)
+                },
+                'hardware': {
+                    'value': evaluation_sheet.hardware,
+                    'max_marks': float(evaluation_sheet.hardware_max_marks)
+                },
+                'timeliness': {
+                    'value': evaluation_sheet.timeliness,
+                    'max_marks': float(evaluation_sheet.timeliness_max_marks)
+                },
+                'student_preparation': {
+                    'value': evaluation_sheet.student_preparation,
+                    'max_marks': float(evaluation_sheet.student_preparation_max_marks)
+                },
+                'code_implementation': {
+                    'value': evaluation_sheet.code_implementation,
+                    'max_marks': float(evaluation_sheet.code_implementation_max_marks)
+                },
+                'commenting': {
+                    'value': evaluation_sheet.commenting,
+                    'max_marks': float(evaluation_sheet.commenting_max_marks)
+                },
+                'schematic': {
+                    'value': evaluation_sheet.schematic,
+                    'max_marks': float(evaluation_sheet.schematic_max_marks)
+                },
+                'course_participation': {
+                    'value': evaluation_sheet.course_participation,
+                    'max_marks': float(evaluation_sheet.course_participation_max_marks)
+                },
+                'total_marks': float(evaluation_sheet.get_earned_marks()),
+                'total_max_marks': float(evaluation_sheet.get_total_max_marks()),
+                'percentage': float(evaluation_sheet.get_percentage())
+            }
+        except EvaluationSheet.DoesNotExist:
+            pass
         
         return JsonResponse(response)
     except Student.DoesNotExist:
@@ -817,6 +969,53 @@ def quick_signoff_submit(request):
                     )
                 except QualityCriteria.DoesNotExist:
                     continue
+    
+    # Process evaluation sheet if present
+    if any(key.startswith('eval_') for key in request.POST.keys()):
+        # Get or create the evaluation sheet for this signoff
+        try:
+            evaluation_sheet = EvaluationSheet.objects.get(signoff=signoff)
+        except EvaluationSheet.DoesNotExist:
+            evaluation_sheet = EvaluationSheet(signoff=signoff)
+        
+        # Extract evaluation fields from the form
+        if 'eval_cleanliness' in request.POST:
+            evaluation_sheet.cleanliness = request.POST.get('eval_cleanliness')
+        if 'eval_hardware' in request.POST:
+            evaluation_sheet.hardware = request.POST.get('eval_hardware')
+        if 'eval_timeliness' in request.POST:
+            evaluation_sheet.timeliness = request.POST.get('eval_timeliness')
+        if 'eval_student_preparation' in request.POST:
+            evaluation_sheet.student_preparation = request.POST.get('eval_student_preparation')
+        if 'eval_code_implementation' in request.POST:
+            evaluation_sheet.code_implementation = request.POST.get('eval_code_implementation')
+        if 'eval_commenting' in request.POST:
+            evaluation_sheet.commenting = request.POST.get('eval_commenting')
+        if 'eval_schematic' in request.POST:
+            evaluation_sheet.schematic = request.POST.get('eval_schematic')
+        if 'eval_course_participation' in request.POST:
+            evaluation_sheet.course_participation = request.POST.get('eval_course_participation')
+            
+        # Save custom max marks if provided
+        if 'eval_cleanliness_max' in request.POST and request.POST.get('eval_cleanliness_max'):
+            evaluation_sheet.cleanliness_max_marks = Decimal(request.POST.get('eval_cleanliness_max'))
+        if 'eval_hardware_max' in request.POST and request.POST.get('eval_hardware_max'):
+            evaluation_sheet.hardware_max_marks = Decimal(request.POST.get('eval_hardware_max'))
+        if 'eval_timeliness_max' in request.POST and request.POST.get('eval_timeliness_max'):
+            evaluation_sheet.timeliness_max_marks = Decimal(request.POST.get('eval_timeliness_max'))
+        if 'eval_student_preparation_max' in request.POST and request.POST.get('eval_student_preparation_max'):
+            evaluation_sheet.student_preparation_max_marks = Decimal(request.POST.get('eval_student_preparation_max'))
+        if 'eval_code_implementation_max' in request.POST and request.POST.get('eval_code_implementation_max'):
+            evaluation_sheet.code_implementation_max_marks = Decimal(request.POST.get('eval_code_implementation_max'))
+        if 'eval_commenting_max' in request.POST and request.POST.get('eval_commenting_max'):
+            evaluation_sheet.commenting_max_marks = Decimal(request.POST.get('eval_commenting_max'))
+        if 'eval_schematic_max' in request.POST and request.POST.get('eval_schematic_max'):
+            evaluation_sheet.schematic_max_marks = Decimal(request.POST.get('eval_schematic_max'))
+        if 'eval_course_participation_max' in request.POST and request.POST.get('eval_course_participation_max'):
+            evaluation_sheet.course_participation_max_marks = Decimal(request.POST.get('eval_course_participation_max'))
+        
+        # Save the evaluation sheet
+        evaluation_sheet.save()
     
     return JsonResponse({
         'success': True, 
@@ -1113,3 +1312,516 @@ def get_completion_css_class(percentage):
         return 'bg-warning'
     else:
         return 'bg-light text-muted'
+@login_required
+def student_detail(request, student_id):
+    """Display detailed information about a specific student."""
+    student = get_object_or_404(Student, id=student_id)
+    
+    # Get all labs
+    labs = Lab.objects.all().order_by('due_date')
+    
+    # Get student progress data
+    total_parts_count = Part.objects.filter(is_required=True).count()
+    completed_parts_count = Signoff.objects.filter(
+        student=student, 
+        status='approved',
+        part__is_required=True
+    ).values('part').distinct().count()
+    
+    # Calculate points
+    total_points = sum(lab.total_points for lab in labs)
+    earned_points = sum(lab.get_student_score(student) for lab in labs)
+    
+    # Categorize labs by completion status
+    completed_labs = []
+    in_progress_labs = []
+    not_started_labs = []
+    
+    for lab in labs:
+        lab_parts = lab.parts.all()
+        approved_parts = Signoff.objects.filter(
+            student=student,
+            part__in=lab_parts,
+            status='approved'
+        ).count()
+        
+        if approved_parts == lab_parts.count() and lab_parts.count() > 0:
+            completed_labs.append(lab)
+        elif approved_parts > 0:
+            in_progress_labs.append(lab)
+        else:
+            not_started_labs.append(lab)
+    
+    # Get recent signoffs
+    recent_signoffs = Signoff.objects.filter(
+        student=student
+    ).select_related('part', 'part__lab').order_by('-date_updated')[:5]
+    
+    context = {
+        'student': student,
+        'labs': labs,
+        'completed_labs': completed_labs,
+        'in_progress_labs': in_progress_labs,
+        'not_started_labs': not_started_labs,
+        'total_parts_count': total_parts_count,
+        'completed_parts_count': completed_parts_count,
+        'total_points': total_points,
+        'earned_points': earned_points,
+        'recent_signoffs': recent_signoffs
+    }
+    
+    return render(request, 'labs/student_detail.html', context)
+
+@login_required
+def lab_detail(request, lab_id):
+    """Display detailed information about a specific lab."""
+    lab = get_object_or_404(Lab, id=lab_id)
+    
+    # Check if we're filtering by student
+    student_id = request.GET.get('student_id')
+    filtered_student = None
+    if student_id:
+        filtered_student = get_object_or_404(Student, id=student_id)
+    
+    # Get all parts for this lab
+    parts = lab.parts.all().order_by('order')
+    
+    # Get all active students
+    students = Student.objects.filter(active=True)
+    total_students = students.count()
+    
+    # Calculate lab completion stats
+    approved_signoffs = Signoff.objects.filter(
+        part__lab=lab,
+        status='approved'
+    ).count()
+    
+    total_required_signoffs = students.count() * parts.filter(is_required=True).count()
+    completion_percentage = (approved_signoffs / total_required_signoffs * 100) if total_required_signoffs > 0 else 0
+    
+    # Calculate average score
+    avg_points = 0
+    avg_score = 0
+    
+    if total_students > 0:
+        total_lab_score = sum(lab.get_student_score(student) for student in students)
+        avg_points = total_lab_score / total_students
+        avg_score = (avg_points / lab.total_points * 100) if lab.total_points > 0 else 0
+    
+    # Calculate student completion status
+    completed_students = 0
+    in_progress_students = 0
+    not_started_students = 0
+    
+    # Grade distribution
+    a_grade_count = 0
+    b_grade_count = 0
+    c_grade_count = 0
+    d_grade_count = 0
+    f_grade_count = 0
+    
+    # Build student progress data
+    student_progress = []
+    
+    for student in students:
+        if filtered_student and student.id != filtered_student.id:
+            continue
+            
+        # Get all signoffs for this student and lab
+        student_signoffs = Signoff.objects.filter(
+            student=student,
+            part__lab=lab
+        ).select_related('part')
+        
+        # Calculate completion status
+        approved_parts_count = student_signoffs.filter(status='approved').count()
+        total_parts_count = parts.count()
+        
+        status = 'not_started'
+        if approved_parts_count == total_parts_count and total_parts_count > 0:
+            status = 'completed'
+            completed_students += 1
+        elif approved_parts_count > 0:
+            status = 'in_progress'
+            in_progress_students += 1
+        else:
+            not_started_students += 1
+        
+        # Calculate percentage and grade
+        percentage = lab.get_student_percentage(student)
+        
+        # Update grade distribution
+        if percentage >= 90:
+            a_grade_count += 1
+        elif percentage >= 80:
+            b_grade_count += 1
+        elif percentage >= 70:
+            c_grade_count += 1
+        elif percentage >= 60:
+            d_grade_count += 1
+        else:
+            f_grade_count += 1
+        
+        # Get last activity date
+        last_activity = student_signoffs.order_by('-date_updated').first()
+        
+        student_progress.append({
+            'student': student,
+            'status': status,
+            'percentage': percentage,
+            'last_activity': last_activity.date_updated if last_activity else None,
+            'approved_parts': approved_parts_count,
+            'total_parts': total_parts_count
+        })
+    
+    # Add part stats
+    for part in parts:
+        part_approved_count = Signoff.objects.filter(
+            part=part,
+            status='approved'
+        ).count()
+        
+        part.approved_count = part_approved_count
+        part.completion_percentage = (part_approved_count / total_students * 100) if total_students > 0 else 0
+    
+    context = {
+        'lab': lab,
+        'filtered_student': filtered_student,
+        'student_progress': student_progress,
+        'total_students': total_students,
+        'approved_signoffs': approved_signoffs,
+        'total_required_signoffs': total_required_signoffs,
+        'completion_percentage': completion_percentage,
+        'avg_points': avg_points,
+        'avg_score': avg_score,
+        'completed_students': completed_students,
+        'in_progress_students': in_progress_students,
+        'not_started_students': not_started_students,
+        'a_grade_count': a_grade_count,
+        'b_grade_count': b_grade_count,
+        'c_grade_count': c_grade_count,
+        'd_grade_count': d_grade_count,
+        'f_grade_count': f_grade_count
+    }
+    
+    return render(request, 'labs/lab_detail.html', context)
+
+@login_required
+def part_detail(request, part_id):
+    """Display detailed information about a specific lab part."""
+    part = get_object_or_404(Part, id=part_id)
+    
+    # Check if we're filtering by student
+    student_id = request.GET.get('student_id')
+    filtered_student = None
+    if student_id:
+        filtered_student = get_object_or_404(Student, id=student_id)
+    
+    # Get all active students
+    students = Student.objects.filter(active=True)
+    total_students = students.count()
+    
+    # Get all signoffs for this part
+    signoffs = Signoff.objects.filter(part=part).select_related('student', 'instructor')
+    
+    # Calculate signoff stats
+    approved_signoffs = signoffs.filter(status='approved').count()
+    rejected_signoffs = signoffs.filter(status='rejected').count()
+    pending_signoffs = signoffs.filter(status='pending').count()
+    
+    # Calculate completion percentage
+    completion_percentage = (approved_signoffs / total_students * 100) if total_students > 0 else 0
+    
+    # Calculate average score
+    avg_points = 0
+    avg_score = 0
+    max_points = part.get_max_score()
+    
+    if approved_signoffs > 0:
+        total_score = sum(signoff.get_total_quality_score() for signoff in signoffs.filter(status='approved'))
+        avg_points = total_score / approved_signoffs
+        avg_score = (avg_points / max_points * 100) if max_points > 0 else 0
+    
+    # Get quality criteria with average scores
+    quality_criteria = QualityCriteria.objects.filter(part=part)
+    
+    for criteria in quality_criteria:
+        # Calculate average score for this criteria
+        criteria_scores = QualityScore.objects.filter(
+            criteria=criteria,
+            signoff__status='approved'
+        )
+        
+        if criteria_scores:
+            criteria.avg_score = sum(score.score for score in criteria_scores) / criteria_scores.count()
+            criteria.avg_percentage = (criteria.avg_score / criteria.max_points * 100) if criteria.max_points > 0 else 0
+        else:
+            criteria.avg_score = None
+            criteria.avg_percentage = None
+    
+    # Get recent signoffs
+    recent_signoffs = signoffs.order_by('-date_updated')[:5]
+    
+    # Get students who haven't started this part
+    signoff_student_ids = signoffs.values_list('student__id', flat=True)
+    not_started_students = students.exclude(id__in=signoff_student_ids)
+    
+    # Filter signoffs by status for tabs
+    approved_signoff_list = signoffs.filter(status='approved').order_by('-date_updated')
+    rejected_signoff_list = signoffs.filter(status='rejected').order_by('-date_updated')
+    pending_signoff_list = signoffs.filter(status='pending').order_by('-date_updated')
+    
+    # Filter by student if specified
+    if filtered_student:
+        approved_signoff_list = approved_signoff_list.filter(student=filtered_student)
+        rejected_signoff_list = rejected_signoff_list.filter(student=filtered_student)
+        pending_signoff_list = pending_signoff_list.filter(student=filtered_student)
+        not_started_students = not_started_students.filter(id=filtered_student.id)
+    
+    context = {
+        'part': part,
+        'filtered_student': filtered_student,
+        'total_students': total_students,
+        'approved_signoffs': approved_signoffs,
+        'rejected_signoffs': rejected_signoffs,
+        'pending_signoffs': pending_signoffs,
+        'not_started': total_students - approved_signoffs - rejected_signoffs - pending_signoffs,
+        'completion_percentage': completion_percentage,
+        'avg_points': avg_points,
+        'avg_score': avg_score,
+        'max_points': max_points,
+        'quality_criteria': quality_criteria,
+        'recent_signoffs': recent_signoffs,
+        'not_started_students': not_started_students,
+        'all_signoffs': signoffs.order_by('-date_updated'),
+        'approved_signoff_list': approved_signoff_list,
+        'rejected_signoff_list': rejected_signoff_list,
+        'pending_signoff_list': pending_signoff_list
+    }
+    
+    return render(request, 'labs/part_detail.html', context)
+
+@login_required
+def signoff_list(request):
+    """Display a list of all signoffs."""
+    # Get filter parameters
+    status = request.GET.get('status')
+    lab_id = request.GET.get('lab_id')
+    student_id = request.GET.get('student_id')
+    
+    # Start with all signoffs
+    signoffs = Signoff.objects.all().select_related(
+        'student', 'part', 'part__lab', 'instructor'
+    ).order_by('-date_updated')
+    
+    # Apply filters
+    if status:
+        signoffs = signoffs.filter(status=status)
+    
+    if lab_id:
+        signoffs = signoffs.filter(part__lab_id=lab_id)
+    
+    if student_id:
+        signoffs = signoffs.filter(student_id=student_id)
+    
+    # Get filter options for dropdowns
+    labs = Lab.objects.all().order_by('name')
+    students = Student.objects.filter(active=True).order_by('name')
+    
+    context = {
+        'signoffs': signoffs,
+        'labs': labs,
+        'students': students,
+        'status_filter': status,
+        'lab_filter': lab_id,
+        'student_filter': student_id
+    }
+    
+    return render(request, 'labs/signoff_list.html', context)
+
+@login_required
+def signoff_detail(request, signoff_id):
+    """Display detailed information about a specific signoff."""
+    signoff = get_object_or_404(Signoff, id=signoff_id)
+    
+    # Get quality scores
+    quality_scores = QualityScore.objects.filter(signoff=signoff).select_related('criteria')
+    quality_total = signoff.get_total_quality_score()
+    quality_max = signoff.get_max_quality_score()
+    
+    # Get evaluation sheet if it exists
+    try:
+        evaluation_sheet = EvaluationSheet.objects.get(signoff=signoff)
+        
+        # Calculate earned marks for displaying
+        cleanliness_earned = float(evaluation_sheet.cleanliness_max_marks) * float(EvaluationSheet.STATUS_TO_SCORE.get(evaluation_sheet.cleanliness, 0))
+        hardware_earned = float(evaluation_sheet.hardware_max_marks) * float(EvaluationSheet.STATUS_TO_SCORE.get(evaluation_sheet.hardware, 0))
+        timeliness_earned = float(evaluation_sheet.timeliness_max_marks) * float(EvaluationSheet.STATUS_TO_SCORE.get(evaluation_sheet.timeliness, 0))
+        student_preparation_earned = float(evaluation_sheet.student_preparation_max_marks) * float(EvaluationSheet.STATUS_TO_SCORE.get(evaluation_sheet.student_preparation, 0))
+        code_implementation_earned = float(evaluation_sheet.code_implementation_max_marks) * float(EvaluationSheet.STATUS_TO_SCORE.get(evaluation_sheet.code_implementation, 0))
+        commenting_earned = float(evaluation_sheet.commenting_max_marks) * float(EvaluationSheet.STATUS_TO_SCORE.get(evaluation_sheet.commenting, 0))
+        schematic_earned = float(evaluation_sheet.schematic_max_marks) * float(EvaluationSheet.STATUS_TO_SCORE.get(evaluation_sheet.schematic, 0))
+        course_participation_earned = float(evaluation_sheet.course_participation_max_marks) * float(EvaluationSheet.STATUS_TO_SCORE.get(evaluation_sheet.course_participation, 0))
+    except EvaluationSheet.DoesNotExist:
+        evaluation_sheet = None
+        cleanliness_earned = hardware_earned = timeliness_earned = student_preparation_earned = 0
+        code_implementation_earned = commenting_earned = schematic_earned = course_participation_earned = 0
+    
+    # Get signoff history
+    signoff_history = Signoff.objects.filter(
+        student=signoff.student,
+        part=signoff.part
+    ).order_by('-date_updated').values(
+        'status', 'comments', 'date_updated', 'instructor__username'
+    )
+    
+    context = {
+        'signoff': signoff,
+        'quality_scores': quality_scores,
+        'quality_total': quality_total,
+        'quality_max': quality_max,
+        'evaluation_sheet': evaluation_sheet,
+        'cleanliness_earned': cleanliness_earned,
+        'hardware_earned': hardware_earned,
+        'timeliness_earned': timeliness_earned,
+        'student_preparation_earned': student_preparation_earned,
+        'code_implementation_earned': code_implementation_earned,
+        'commenting_earned': commenting_earned,
+        'schematic_earned': schematic_earned,
+        'course_participation_earned': course_participation_earned,
+        'signoff_history': signoff_history
+    }
+    
+    return render(request, 'labs/signoff_detail.html', context)
+
+@login_required
+def signoff_edit(request, signoff_id):
+    """Edit a specific signoff."""
+    signoff = get_object_or_404(Signoff, id=signoff_id)
+    
+    if request.method == 'POST':
+        # Update signoff basic info
+        signoff.status = request.POST.get('status')
+        signoff.comments = request.POST.get('comments')
+        signoff.instructor = request.user
+        signoff.save()
+        
+        # Update quality scores
+        for key, value in request.POST.items():
+            if key.startswith('criteria_'):
+                criteria_id = key.split('_')[1]
+                try:
+                    criteria = QualityCriteria.objects.get(id=criteria_id)
+                    
+                    # Convert radio value to points based on criteria's max_points
+                    value_map = {
+                        '0': 0,  # Not Applicable
+                        '1': int(criteria.max_points * 0.25),  # Poor/Not Complete - 25%
+                        '2': int(criteria.max_points * 0.5),  # Meets Requirements - 50%
+                        '3': int(criteria.max_points * 0.75),  # Exceeds Requirements - 75%
+                        '4': criteria.max_points  # Outstanding - 100%
+                    }
+                    score = value_map.get(value, 0)
+                    
+                    # Create or update score
+                    QualityScore.objects.update_or_create(
+                        signoff=signoff,
+                        criteria=criteria,
+                        defaults={'score': score}
+                    )
+                except QualityCriteria.DoesNotExist:
+                    continue
+        
+        # Process evaluation sheet
+        if any(key.startswith('eval_') for key in request.POST.keys()):
+            # Get or create the evaluation sheet
+            try:
+                evaluation_sheet = EvaluationSheet.objects.get(signoff=signoff)
+            except EvaluationSheet.DoesNotExist:
+                evaluation_sheet = EvaluationSheet(signoff=signoff)
+            
+            # Update evaluation fields
+            if 'eval_cleanliness' in request.POST:
+                evaluation_sheet.cleanliness = request.POST.get('eval_cleanliness')
+            if 'eval_hardware' in request.POST:
+                evaluation_sheet.hardware = request.POST.get('eval_hardware')
+            if 'eval_timeliness' in request.POST:
+                evaluation_sheet.timeliness = request.POST.get('eval_timeliness')
+            if 'eval_student_preparation' in request.POST:
+                evaluation_sheet.student_preparation = request.POST.get('eval_student_preparation')
+            if 'eval_code_implementation' in request.POST:
+                evaluation_sheet.code_implementation = request.POST.get('eval_code_implementation')
+            if 'eval_commenting' in request.POST:
+                evaluation_sheet.commenting = request.POST.get('eval_commenting')
+            if 'eval_schematic' in request.POST:
+                evaluation_sheet.schematic = request.POST.get('eval_schematic')
+            if 'eval_course_participation' in request.POST:
+                evaluation_sheet.course_participation = request.POST.get('eval_course_participation')
+            
+            # Update max marks
+            if 'eval_cleanliness_max' in request.POST and request.POST.get('eval_cleanliness_max'):
+                evaluation_sheet.cleanliness_max_marks = Decimal(request.POST.get('eval_cleanliness_max'))
+            if 'eval_hardware_max' in request.POST and request.POST.get('eval_hardware_max'):
+                evaluation_sheet.hardware_max_marks = Decimal(request.POST.get('eval_hardware_max'))
+            if 'eval_timeliness_max' in request.POST and request.POST.get('eval_timeliness_max'):
+                evaluation_sheet.timeliness_max_marks = Decimal(request.POST.get('eval_timeliness_max'))
+            if 'eval_student_preparation_max' in request.POST and request.POST.get('eval_student_preparation_max'):
+                evaluation_sheet.student_preparation_max_marks = Decimal(request.POST.get('eval_student_preparation_max'))
+            if 'eval_code_implementation_max' in request.POST and request.POST.get('eval_code_implementation_max'):
+                evaluation_sheet.code_implementation_max_marks = Decimal(request.POST.get('eval_code_implementation_max'))
+            if 'eval_commenting_max' in request.POST and request.POST.get('eval_commenting_max'):
+                evaluation_sheet.commenting_max_marks = Decimal(request.POST.get('eval_commenting_max'))
+            if 'eval_schematic_max' in request.POST and request.POST.get('eval_schematic_max'):
+                evaluation_sheet.schematic_max_marks = Decimal(request.POST.get('eval_schematic_max'))
+            if 'eval_course_participation_max' in request.POST and request.POST.get('eval_course_participation_max'):
+                evaluation_sheet.course_participation_max_marks = Decimal(request.POST.get('eval_course_participation_max'))
+            
+            # Save the evaluation sheet
+            evaluation_sheet.save()
+        
+        messages.success(request, "Signoff updated successfully.")
+        return redirect('labs:signoff_detail', signoff_id=signoff.id)
+    
+    # Get quality criteria with current scores
+    quality_criteria = QualityCriteria.objects.filter(part=signoff.part)
+    
+    for criteria in quality_criteria:
+        try:
+            score = QualityScore.objects.get(signoff=signoff, criteria=criteria)
+            if criteria.max_points == 0:
+                criteria.score_percentage = 0
+            else:
+                criteria.score_percentage = (score.score / criteria.max_points) * 100
+            
+            # Map to radio button values
+            if criteria.score_percentage == 0:
+                criteria.radio_value = 0  # Not Applicable
+            elif criteria.score_percentage <= 25:
+                criteria.radio_value = 1  # Poor/Not Complete
+            elif criteria.score_percentage <= 50:
+                criteria.radio_value = 2  # Meets Requirements
+            elif criteria.score_percentage <= 75:
+                criteria.radio_value = 3  # Exceeds Requirements
+            else:
+                criteria.radio_value = 4  # Outstanding
+                
+            # Set get_score_value for template
+            criteria.get_score_value = criteria.score_percentage
+        except QualityScore.DoesNotExist:
+            criteria.score_percentage = 0
+            criteria.radio_value = 2  # Default to Meets Requirements
+            criteria.get_score_value = 50  # Default to 50%
+    
+    # Get evaluation sheet if it exists
+    try:
+        evaluation_sheet = EvaluationSheet.objects.get(signoff=signoff)
+    except EvaluationSheet.DoesNotExist:
+        evaluation_sheet = None
+    
+    context = {
+        'signoff': signoff,
+        'quality_criteria': quality_criteria,
+        'evaluation_sheet': evaluation_sheet
+    }
+    
+    return render(request, 'labs/signoff_edit.html', context)

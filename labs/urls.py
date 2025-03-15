@@ -11,11 +11,13 @@ urlpatterns = [
     path("", views.home_view, name="home"),
     
     path('labs/', views.lab_list, name='lab_list'),
+    path('lab/<int:lab_id>/', views.lab_detail, name='lab_detail'),
     # path('lab/create/', views.lab_create, name='lab_create'),
     # path('lab/edit/<int:pk>/', views.lab_edit, name='lab_edit'),
     # path('lab/<int:lab_id>/parts/', views.part_list, name='part_list'),
     
     # Part management URLs
+    path('part/<int:part_id>/', views.part_detail, name='part_detail'),
     # path('part/create/<int:lab_id>/', views.part_create, name='part_create'),
     # path('part/edit/<int:pk>/', views.part_edit, name='part_edit'),
     # path('part/<int:part_id>/criteria/', views.criteria_list, name='criteria_list'),
@@ -29,9 +31,9 @@ urlpatterns = [
     path('students/upload/', views.student_upload, name='student_upload'),
     path('students/batch/', views.batch_toggle_students, name='batch_toggle_students'),
     path('student/toggle-active/<int:student_id>/', views.student_toggle_active, name='student_toggle_active'),
+    path('student/<int:student_id>/', views.student_detail, name='student_detail'),
     # path('student/create/', views.student_create, name='student_create'),
     # path('student/edit/<int:pk>/', views.student_edit, name='student_edit'),
-    # path('student/<int:student_id>/', views.student_detail, name='student_detail'),
     
     # User management URLs
     path('users/', views.user_list, name='user_list'),
@@ -39,10 +41,10 @@ urlpatterns = [
     path('user/edit/<int:user_id>/', views.user_edit, name='user_edit'),
     
     # Signoff management URLs
-    # path('signoffs/', views.signoff_list, name='signoff_list'),
+    path('signoffs/', views.signoff_list, name='signoff_list'),
+    path('signoff/<int:signoff_id>/', views.signoff_detail, name='signoff_detail'),
+    path('signoff/edit/<int:signoff_id>/', views.signoff_edit, name='signoff_edit'),
     # path('signoff/create/', views.signoff_create, name='signoff_create'),
-    # path('signoff/<int:pk>/', views.signoff_detail, name='signoff_detail'),
-    # path('signoff/edit/<int:pk>/', views.signoff_edit, name='signoff_edit'),
     # path('quick-signoff/', views.quick_signoff, name='quick_signoff'),
     
     # AJAX endpoints

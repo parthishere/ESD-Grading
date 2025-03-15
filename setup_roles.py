@@ -65,7 +65,7 @@ def setup_role_permissions():
 
 def create_superuser_if_needed():
     """Create a superuser if none exists"""
-    if not User.objects.filter(is_superuser=True).exists():
+    if not User.objects.get().exists():
         print("Creating superuser...")
         user = User.objects.create_superuser(
             username='admin',

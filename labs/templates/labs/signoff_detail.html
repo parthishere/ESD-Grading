@@ -1,0 +1,352 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Signoff Details{% endblock %}
+
+{% block extra_css %}
+<style>
+    .signoff-header {
+        background-color: #f8f9fa;
+        border-radius: 0.25rem;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+    }
+    .progress {
+        height: 1.2rem;
+    }
+    .quality-table th, .quality-table td {
+        padding: 0.75rem 1rem;
+    }
+    .quality-scale {
+        display: flex;
+        width: 100%;
+        margin-top: 1rem;
+    }
+    .quality-scale .scale-item {
+        flex: 1;
+        text-align: center;
+        padding: 0.25rem;
+        font-size: 0.8rem;
+        border-right: 1px solid #eee;
+    }
+    .quality-scale .scale-item:last-child {
+        border-right: none;
+    }
+    .quality-scale .scale-item.na {
+        background-color: #f0f0f0;
+    }
+    .quality-scale .scale-item.poor {
+        background-color: #ffe0e0;
+    }
+    .quality-scale .scale-item.meets {
+        background-color: #e0ffe0;
+    }
+    .quality-scale .scale-item.exceeds {
+        background-color: #e0e0ff;
+    }
+    .quality-scale .scale-item.outstanding {
+        background-color: #ffffe0;
+    }
+    .evaluation-table th {
+        font-weight: 600;
+    }
+    .history-item {
+        border-left: 4px solid #ccc;
+        padding: 0.75rem 1rem;
+        margin-bottom: 1rem;
+        background-color: #f8f9fa;
+    }
+    .history-item.approved {
+        border-left-color: #28a745;
+    }
+    .history-item.rejected {
+        border-left-color: #dc3545;
+    }
+    .history-item.pending {
+        border-left-color: #ffc107;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <!-- Signoff Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h1>
+                    <i class="fas fa-clipboard-check me-2"></i>Signoff Details
+                    <span class="badge bg-{{ signoff.status }} ms-2">{{ signoff.status|title }}</span>
+                </h1>
+                <div>
+                    <a href="{% url 'labs:student_detail' signoff.student.id %}" class="btn btn-outline-primary">
+                        <i class="fas fa-user-graduate me-1"></i> Student
+                    </a>
+                    <a href="{% url 'labs:part_detail' signoff.part.id %}" class="btn btn-outline-primary ms-2">
+                        <i class="fas fa-puzzle-piece me-1"></i> Part
+                    </a>
+                    <a href="{% url 'labs:signoff_edit' signoff.id %}" class="btn btn-primary ms-2">
+                        <i class="fas fa-edit me-1"></i> Edit
+                    </a>
+                </div>
+            </div>
+            <div class="text-muted mb-3">
+                <i class="fas fa-flask me-1"></i> <a href="{% url 'labs:lab_detail' signoff.part.lab.id %}">{{ signoff.part.lab.name }}</a> / 
+                <a href="{% url 'labs:part_detail' signoff.part.id %}">{{ signoff.part.name }}</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <div class="col-md-4 mb-4 mb-md-0">
+            <div class="card h-100">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="h5 mb-0"><i class="fas fa-info-circle me-2"></i>Signoff Information</h3>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex flex-column">
+                        <p class="mb-3">
+                            <strong>Student:</strong><br> 
+                            <a href="{% url 'labs:student_detail' signoff.student.id %}">
+                                {{ signoff.student.name }} ({{ signoff.student.student_id }})
+                            </a>
+                        </p>
+                        <p class="mb-3">
+                            <strong>Part:</strong><br>
+                            <a href="{% url 'labs:part_detail' signoff.part.id %}">
+                                {{ signoff.part.name }}
+                            </a>
+                        </p>
+                        <p class="mb-3">
+                            <strong>Instructor:</strong><br>
+                            {{ signoff.instructor.username }}
+                            {% if signoff.instructor.email %}
+                            ({{ signoff.instructor.email }})
+                            {% endif %}
+                        </p>
+                        <p class="mb-3">
+                            <strong>Status:</strong><br>
+                            <span class="badge bg-{{ signoff.status }} py-2 px-3">{{ signoff.status|title }}</span>
+                        </p>
+                        <p class="mb-3">
+                            <strong>Date Submitted:</strong><br>
+                            {{ signoff.date_submitted|date:"F d, Y H:i" }}
+                        </p>
+                        <p class="mb-3">
+                            <strong>Last Updated:</strong><br>
+                            {{ signoff.date_updated|date:"F d, Y H:i" }}
+                        </p>
+                        {% if signoff.comments %}
+                        <div class="mb-0">
+                            <strong>Comments:</strong><br>
+                            <div class="p-3 bg-light rounded">
+                                {{ signoff.comments|linebreaks }}
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-8">
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="h5 mb-0"><i class="fas fa-chart-pie me-2"></i>Score Summary</h3>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-4">
+                        <div class="col-md-6 mb-3 mb-md-0">
+                            <h5>Overall Score</h5>
+                            <div class="progress mb-2">
+                                <div class="progress-bar {% if signoff.get_quality_percentage >= 90 %}bg-success{% elif signoff.get_quality_percentage >= 80 %}bg-primary{% elif signoff.get_quality_percentage >= 70 %}bg-info{% elif signoff.get_quality_percentage >= 60 %}bg-warning{% else %}bg-danger{% endif %}" 
+                                     role="progressbar" 
+                                     style="width: {{ signoff.get_quality_percentage }}%;" 
+                                     aria-valuenow="{{ signoff.get_quality_percentage }}" 
+                                     aria-valuemin="0" 
+                                     aria-valuemax="100">
+                                    {{ signoff.get_quality_percentage|floatformat:1 }}%
+                                </div>
+                            </div>
+                            <p>
+                                <strong>{{ signoff.get_total_quality_score|floatformat:2 }}</strong> / {{ signoff.get_max_quality_score|floatformat:2 }} points
+                            </p>
+                        </div>
+                        <div class="col-md-6">
+                            <h5>Grading Scale</h5>
+                            <div class="quality-scale">
+                                <div class="scale-item na">N/A<br>0%</div>
+                                <div class="scale-item poor">Poor<br>25%</div>
+                                <div class="scale-item meets">Meets<br>50%</div>
+                                <div class="scale-item exceeds">Exceeds<br>75%</div>
+                                <div class="scale-item outstanding">Outstanding<br>100%</div>
+                            </div>
+                            <p class="mt-2 text-muted small">
+                                Quality ratings are converted to percentages based on this scale. This determines how many points are earned out of the maximum available.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {% if quality_scores %}
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="h5 mb-0"><i class="fas fa-list-check me-2"></i>Quality Criteria Scores</h3>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered quality-table">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Criteria</th>
+                                    <th>Raw Score</th>
+                                    <th>Weight</th>
+                                    <th>Percentage</th>
+                                    <th>Weighted Points</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for score in quality_scores %}
+                                <tr>
+                                    <td>{{ score.criteria.name }}</td>
+                                    <td>{{ score.score }} / {{ score.criteria.max_points }}</td>
+                                    <td>{{ score.criteria.weight|floatformat:2 }}</td>
+                                    <td>
+                                        <div class="progress" style="height: 15px;">
+                                            <div class="progress-bar {% if score.percentage >= 90 %}bg-success{% elif score.percentage >= 80 %}bg-primary{% elif score.percentage >= 70 %}bg-info{% elif score.percentage >= 60 %}bg-warning{% else %}bg-danger{% endif %}" 
+                                                 role="progressbar" 
+                                                 style="width: {{ score.percentage }}%;" 
+                                                 aria-valuenow="{{ score.percentage }}" 
+                                                 aria-valuemin="0" 
+                                                 aria-valuemax="100">
+                                                {{ score.percentage|floatformat:1 }}%
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>{{ score.weighted_score|floatformat:2 }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot class="table-light">
+                                <tr>
+                                    <th colspan="4">Total Quality Score</th>
+                                    <th>{{ quality_total|floatformat:2 }} / {{ quality_max|floatformat:2 }}</th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if evaluation_sheet %}
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="h5 mb-0"><i class="fas fa-check-square me-2"></i>Evaluation Sheet</h3>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-bordered evaluation-table">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Criterion</th>
+                                    <th>Status</th>
+                                    <th>Max Marks</th>
+                                    <th>Earned Marks</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Cleanliness</td>
+                                    <td>{{ evaluation_sheet.get_cleanliness_display }}</td>
+                                    <td>{{ evaluation_sheet.cleanliness_max_marks }}</td>
+                                    <td>{{ cleanliness_earned|floatformat:2 }}</td>
+                                </tr>
+                                <tr>
+                                    <td>Hardware</td>
+                                    <td>{{ evaluation_sheet.get_hardware_display }}</td>
+                                    <td>{{ evaluation_sheet.hardware_max_marks }}</td>
+                                    <td>{{ hardware_earned|floatformat:2 }}</td>
+                                </tr>
+                                <tr>
+                                    <td>Timeliness</td>
+                                    <td>{{ evaluation_sheet.get_timeliness_display }}</td>
+                                    <td>{{ evaluation_sheet.timeliness_max_marks }}</td>
+                                    <td>{{ timeliness_earned|floatformat:2 }}</td>
+                                </tr>
+                                <tr>
+                                    <td>Student Preparation</td>
+                                    <td>{{ evaluation_sheet.get_student_preparation_display }}</td>
+                                    <td>{{ evaluation_sheet.student_preparation_max_marks }}</td>
+                                    <td>{{ student_preparation_earned|floatformat:2 }}</td>
+                                </tr>
+                                <tr>
+                                    <td>Code Implementation</td>
+                                    <td>{{ evaluation_sheet.get_code_implementation_display }}</td>
+                                    <td>{{ evaluation_sheet.code_implementation_max_marks }}</td>
+                                    <td>{{ code_implementation_earned|floatformat:2 }}</td>
+                                </tr>
+                                <tr>
+                                    <td>Commenting</td>
+                                    <td>{{ evaluation_sheet.get_commenting_display }}</td>
+                                    <td>{{ evaluation_sheet.commenting_max_marks }}</td>
+                                    <td>{{ commenting_earned|floatformat:2 }}</td>
+                                </tr>
+                                <tr>
+                                    <td>Schematic</td>
+                                    <td>{{ evaluation_sheet.get_schematic_display }}</td>
+                                    <td>{{ evaluation_sheet.schematic_max_marks }}</td>
+                                    <td>{{ schematic_earned|floatformat:2 }}</td>
+                                </tr>
+                                <tr>
+                                    <td>Course Participation</td>
+                                    <td>{{ evaluation_sheet.get_course_participation_display }}</td>
+                                    <td>{{ evaluation_sheet.course_participation_max_marks }}</td>
+                                    <td>{{ course_participation_earned|floatformat:2 }}</td>
+                                </tr>
+                            </tbody>
+                            <tfoot class="table-light">
+                                <tr>
+                                    <th colspan="2">Total Evaluation Score</th>
+                                    <th>{{ evaluation_sheet.get_total_max_marks|floatformat:2 }}</th>
+                                    <th>{{ evaluation_sheet.get_earned_marks|floatformat:2 }}</th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if signoff_history %}
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h3 class="h5 mb-0"><i class="fas fa-history me-2"></i>Signoff History</h3>
+                </div>
+                <div class="card-body">
+                    {% for history_item in signoff_history %}
+                    <div class="history-item {{ history_item.status }}">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <strong>{{ history_item.instructor__username }}</strong>
+                            <span class="text-muted">{{ history_item.date_updated|date:"F d, Y H:i" }}</span>
+                        </div>
+                        <div class="mb-2">
+                            <span class="badge bg-{{ history_item.status }}">{{ history_item.status|title }}</span>
+                        </div>
+                        {% if history_item.comments %}
+                        <div class="small">
+                            {{ history_item.comments|linebreaks }}
+                        </div>
+                        {% else %}
+                        <div class="text-muted small">No comments</div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

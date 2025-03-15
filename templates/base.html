@@ -70,9 +70,9 @@
                             <i class="fas fa-clipboard-check me-1"></i>Signoffs
                         </a>
                         <ul class="dropdown-menu">
-                            <li><a class="dropdown-item" href="#">View All Signoffs</a></li>
+                            <li><a class="dropdown-item" href="{% url 'labs:signoff_list' %}">View All Signoffs</a></li>
                             {% if request.user|has_role:'instructor' or request.user|has_role:'ta' %}
-                            <li><a class="dropdown-item" href="#">Create New Signoff</a></li>
+                            <li><a class="dropdown-item" href="{% url 'labs:home' %}">Create New Signoff</a></li>
                             {% endif %}
                         </ul>
                     </li>

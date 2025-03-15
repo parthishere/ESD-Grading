@@ -130,6 +130,9 @@
                                 </div>
                             </td>
                             <td class="action-buttons text-center">
+                                <a href="{% url 'labs:student_detail' student.id %}" class="btn btn-sm btn-info me-1" title="View student details">
+                                    <i class="fas fa-user"></i>
+                                </a>
                                 <a href="{% url 'labs:student_grade_report' student.id %}" class="btn btn-sm btn-primary me-1" title="View grade report">
                                     <i class="fas fa-chart-bar"></i>
                                 </a>

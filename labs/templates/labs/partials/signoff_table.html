@@ -1,0 +1,67 @@
+{% if signoffs %}
+<div class="table-responsive mt-3">
+    <table class="table table-hover">
+        <thead class="table-light">
+            <tr>
+                <th>Student</th>
+                <th>Status</th>
+                <th>Score</th>
+                <th>Last Updated</th>
+                <th>Instructor</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for signoff in signoffs %}
+            <tr class="signoff-row">
+                <td>
+                    <a href="{% url 'labs:student_detail' signoff.student.id %}">
+                        {{ signoff.student.name }}
+                    </a>
+                </td>
+                <td>
+                    <span class="badge bg-{{ signoff.status }}">{{ signoff.status|title }}</span>
+                </td>
+                <td>
+                    {% if signoff.status == 'approved' %}
+                    <div class="d-flex align-items-center">
+                        <div class="progress me-2" style="width: 80px;">
+                            <div class="progress-bar {% if signoff.get_quality_percentage >= 90 %}bg-success{% elif signoff.get_quality_percentage >= 80 %}bg-primary{% elif signoff.get_quality_percentage >= 70 %}bg-info{% elif signoff.get_quality_percentage >= 60 %}bg-warning{% else %}bg-danger{% endif %}" 
+                                 role="progressbar" 
+                                 style="width: {{ signoff.get_quality_percentage }}%;" 
+                                 aria-valuenow="{{ signoff.get_quality_percentage }}" 
+                                 aria-valuemin="0" 
+                                 aria-valuemax="100">
+                            </div>
+                        </div>
+                        <span>{{ signoff.get_total_quality_score|floatformat:2 }} / {{ signoff.get_max_quality_score|floatformat:2 }}</span>
+                    </div>
+                    {% else %}
+                    <span class="text-muted">-</span>
+                    {% endif %}
+                </td>
+                <td>{{ signoff.date_updated|date:"M d, Y H:i" }}</td>
+                <td>{{ signoff.instructor.username }}</td>
+                <td>
+                    <div class="btn-group">
+                        <a href="{% url 'labs:signoff_detail' signoff.id %}" class="btn btn-sm btn-outline-primary">
+                            <i class="fas fa-eye"></i>
+                        </a>
+                        <a href="{% url 'labs:signoff_edit' signoff.id %}" class="btn btn-sm btn-outline-secondary">
+                            <i class="fas fa-edit"></i>
+                        </a>
+                        <a href="{% url 'labs:home' %}?student_id={{ signoff.student.student_id }}&lab_id={{ signoff.part.lab.id }}&part_id={{ signoff.part.id }}" class="btn btn-sm btn-outline-success">
+                            <i class="fas fa-clipboard-check"></i>
+                        </a>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="alert alert-info mt-3">
+    <i class="fas fa-info-circle me-2"></i> No signoffs found in this category.
+</div>
+{% endif %}

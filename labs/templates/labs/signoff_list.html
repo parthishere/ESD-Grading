@@ -1,0 +1,182 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Signoffs{% endblock %}
+
+{% block extra_css %}
+<style>
+    .filter-card {
+        margin-bottom: 1.5rem;
+    }
+    .signoff-row:hover {
+        background-color: rgba(0,0,0,0.03);
+    }
+    .status-indicator {
+        width: 10px;
+        height: 10px;
+        display: inline-block;
+        border-radius: 50%;
+        margin-right: 0.5rem;
+    }
+    .status-approved {
+        background-color: #28a745;
+    }
+    .status-rejected {
+        background-color: #dc3545;
+    }
+    .status-pending {
+        background-color: #ffc107;
+    }
+    .filter-badge {
+        font-size: 0.85rem;
+        font-weight: normal;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1>
+                    <i class="fas fa-clipboard-check me-2"></i>Signoffs
+                    {% if status_filter or lab_filter or student_filter %}
+                    <span class="badge bg-light text-dark ms-2 filter-badge">Filtered Results</span>
+                    {% endif %}
+                </h1>
+                <div>
+                    <a href="{% url 'labs:home' %}" class="btn btn-primary">
+                        <i class="fas fa-plus-circle me-1"></i> New Signoff
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Filter Panel -->
+        <div class="col-md-3 mb-4">
+            <div class="card sticky-top filter-card" style="top: 1rem;">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0"><i class="fas fa-filter me-2"></i>Filters</h5>
+                </div>
+                <div class="card-body">
+                    <form method="get" action="{% url 'labs:signoff_list' %}">
+                        <div class="mb-3">
+                            <label for="status" class="form-label">Status</label>
+                            <select name="status" id="status" class="form-select">
+                                <option value="">All Statuses</option>
+                                <option value="approved" {% if status_filter == 'approved' %}selected{% endif %}>Approved</option>
+                                <option value="rejected" {% if status_filter == 'rejected' %}selected{% endif %}>Rejected</option>
+                                <option value="pending" {% if status_filter == 'pending' %}selected{% endif %}>Pending</option>
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="lab" class="form-label">Lab</label>
+                            <select name="lab_id" id="lab" class="form-select">
+                                <option value="">All Labs</option>
+                                {% for lab in labs %}
+                                <option value="{{ lab.id }}" {% if lab_filter == lab.id|stringformat:"i" %}selected{% endif %}>{{ lab.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="mb-3">
+                            <label for="student" class="form-label">Student</label>
+                            <select name="student_id" id="student" class="form-select">
+                                <option value="">All Students</option>
+                                {% for student in students %}
+                                <option value="{{ student.id }}" {% if student_filter == student.id|stringformat:"i" %}selected{% endif %}>{{ student.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-search me-1"></i> Apply Filters
+                            </button>
+                            {% if status_filter or lab_filter or student_filter %}
+                            <a href="{% url 'labs:signoff_list' %}" class="btn btn-outline-secondary">
+                                <i class="fas fa-times me-1"></i> Clear Filters
+                            </a>
+                            {% endif %}
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Signoffs Table -->
+        <div class="col-md-9">
+            <div class="card">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Signoff Results</h5>
+                    <span class="badge bg-primary">{{ signoffs.count }} signoffs</span>
+                </div>
+                <div class="card-body">
+                    {% if signoffs %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Student</th>
+                                    <th>Lab</th>
+                                    <th>Part</th>
+                                    <th>Status</th>
+                                    <th>Last Updated</th>
+                                    <th>Instructor</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for signoff in signoffs %}
+                                <tr class="signoff-row">
+                                    <td>
+                                        <a href="{% url 'labs:student_detail' signoff.student.id %}">
+                                            {{ signoff.student.name }}
+                                        </a>
+                                    </td>
+                                    <td>
+                                        <a href="{% url 'labs:lab_detail' signoff.part.lab.id %}">
+                                            {{ signoff.part.lab.name }}
+                                        </a>
+                                    </td>
+                                    <td>
+                                        <a href="{% url 'labs:part_detail' signoff.part.id %}">
+                                            {{ signoff.part.name }}
+                                        </a>
+                                    </td>
+                                    <td>
+                                        <span class="status-indicator status-{{ signoff.status }}"></span>
+                                        {{ signoff.status|title }}
+                                    </td>
+                                    <td>{{ signoff.date_updated|date:"M d, Y H:i" }}</td>
+                                    <td>{{ signoff.instructor.username }}</td>
+                                    <td>
+                                        <div class="btn-group">
+                                            <a href="{% url 'labs:signoff_detail' signoff.id %}" class="btn btn-sm btn-outline-primary">
+                                                <i class="fas fa-eye"></i>
+                                            </a>
+                                            <a href="{% url 'labs:signoff_edit' signoff.id %}" class="btn btn-sm btn-outline-secondary">
+                                                <i class="fas fa-edit"></i>
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-info-circle me-2"></i> No signoffs found matching your filters.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

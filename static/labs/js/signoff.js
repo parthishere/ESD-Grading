@@ -282,6 +282,15 @@ document.addEventListener("DOMContentLoaded", function () {
             },
           ];
 
+    // Draw a header row with criteria title
+    const headerRow = document.createElement("tr");
+    const headerCell = document.createElement("th");
+    headerCell.setAttribute("colspan", "6");
+    headerCell.classList.add("bg-light", "pt-3");
+    headerCell.innerHTML = "<h5>Quality Criteria</h5>";
+    headerRow.appendChild(headerCell);
+    criteriaContainer.appendChild(headerRow);
+
     // Draw a row for each criterion
     criteriaToDraw.forEach((criterion) => {
       const row = document.createElement("tr");
@@ -312,6 +321,123 @@ document.addEventListener("DOMContentLoaded", function () {
 
       criteriaContainer.appendChild(row);
     });
+    
+    // Add the evaluation sheet criteria
+    renderEvaluationSheet();
+  }
+  
+  /**
+   * Render evaluation sheet form
+   */
+  function renderEvaluationSheet() {
+    // Define evaluation criteria with their default max marks
+    const evaluationCriteria = [
+      { id: "cleanliness", name: "Cleanliness", max_marks: 5.0 },
+      { id: "hardware", name: "Hardware", max_marks: 10.0 },
+      { id: "timeliness", name: "Timeliness", max_marks: 5.0 },
+      { id: "student_preparation", name: "Student Preparation", max_marks: 10.0 },
+      { id: "code_implementation", name: "Code Implementation", max_marks: 15.0 },
+      { id: "commenting", name: "Commenting", max_marks: 5.0 },
+      { id: "schematic", name: "Schematic", max_marks: 10.0 },
+      { id: "course_participation", name: "Course Participation", max_marks: 5.0 },
+    ];
+
+    // Define status options
+    const statusOptions = [
+      { value: "ER", label: "Exceeds Requirements" },
+      { value: "MR", label: "Meets Requirements" },
+      { value: "MM", label: "Minimally Meets" },
+      { value: "IR", label: "Improvement Required" },
+      { value: "ND", label: "Not Demonstrated" },
+    ];
+
+    // Add a separator row
+    const separatorRow = document.createElement("tr");
+    const separatorCell = document.createElement("td");
+    separatorCell.setAttribute("colspan", "6");
+    separatorCell.className = "pt-4";
+    separatorRow.appendChild(separatorCell);
+    criteriaContainer.appendChild(separatorRow);
+
+    // Add a header row for the evaluation sheet
+    const headerRow = document.createElement("tr");
+    const headerCell = document.createElement("th");
+    headerCell.setAttribute("colspan", "6");
+    headerCell.classList.add("bg-light");
+    headerCell.innerHTML = "<h5>Evaluation Sheet</h5>";
+    headerRow.appendChild(headerCell);
+    criteriaContainer.appendChild(headerRow);
+
+    // Add column headers
+    const columnHeaderRow = document.createElement("tr");
+    const criterionHeaderCell = document.createElement("th");
+    criterionHeaderCell.textContent = "Criterion";
+    columnHeaderRow.appendChild(criterionHeaderCell);
+    
+    const marksHeaderCell = document.createElement("th");
+    marksHeaderCell.textContent = "Max Marks";
+    marksHeaderCell.className = "text-center";
+    columnHeaderRow.appendChild(marksHeaderCell);
+    
+    const statusHeaderCell = document.createElement("th");
+    statusHeaderCell.setAttribute("colspan", "4");
+    statusHeaderCell.textContent = "Status";
+    statusHeaderCell.className = "text-center";
+    columnHeaderRow.appendChild(statusHeaderCell);
+    
+    criteriaContainer.appendChild(columnHeaderRow);
+
+    // Add rows for each evaluation criterion
+    evaluationCriteria.forEach(criterion => {
+      const row = document.createElement("tr");
+      
+      // Criterion name
+      const nameCell = document.createElement("td");
+      nameCell.textContent = criterion.name;
+      row.appendChild(nameCell);
+      
+      // Max marks input
+      const marksCell = document.createElement("td");
+      marksCell.className = "text-center";
+      const marksInput = document.createElement("input");
+      marksInput.type = "number";
+      marksInput.name = `eval_${criterion.id}_max`;
+      marksInput.value = criterion.max_marks;
+      marksInput.min = "0";
+      marksInput.step = "0.5";
+      marksInput.className = "form-control form-control-sm";
+      marksInput.style.width = "70px";
+      marksCell.appendChild(marksInput);
+      row.appendChild(marksCell);
+      
+      // Status dropdown
+      const statusCell = document.createElement("td");
+      statusCell.setAttribute("colspan", "4");
+      statusCell.className = "text-center";
+      
+      const statusSelect = document.createElement("select");
+      statusSelect.name = `eval_${criterion.id}`;
+      statusSelect.className = "form-select form-select-sm";
+      
+      // Add options to dropdown
+      statusOptions.forEach(option => {
+        const optionElement = document.createElement("option");
+        optionElement.value = option.value;
+        optionElement.textContent = option.label;
+        
+        // Set "Meets Requirements" as default
+        if (option.value === "MR") {
+          optionElement.selected = true;
+        }
+        
+        statusSelect.appendChild(optionElement);
+      });
+      
+      statusCell.appendChild(statusSelect);
+      row.appendChild(statusCell);
+      
+      criteriaContainer.appendChild(row);
+    });
   }
 
   /**
@@ -319,11 +445,16 @@ document.addEventListener("DOMContentLoaded", function () {
    * @param {number} partId - ID of the selected part
    */
   function checkExistingSignoff(partId) {
+    // Show loading indicator
+    showSpinner();
+    
     fetch(
       `/api/get-signoff-details/?student_id=${currentStudent.studentId}&part_id=${partId}`
     )
       .then((response) => response.json())
       .then((data) => {
+        hideSpinner();
+        
         if (data.found) {
           // Populate form with existing data
           document.getElementById("comments").value = data.comments || "";
@@ -336,23 +467,53 @@ document.addEventListener("DOMContentLoaded", function () {
           };
 
           const scoreValue = overallScoreMap[data.status];
-          document.querySelector(
+          const overallRadio = document.querySelector(
             `input[name="overall_score"][value="${scoreValue}"]`
-          ).checked = true;
+          );
+          if (overallRadio) {
+            overallRadio.checked = true;
+          }
 
           // Set criteria scores
-          data.quality_scores.forEach((score) => {
-            const scoreValue = calculateRadioValue(
-              score.score,
-              score.criteria__max_points
-            );
-            const radio = document.querySelector(
-              `input[name="criteria_${score.criteria_id}"][value="${scoreValue}"]`
-            );
-            if (radio) {
-              radio.checked = true;
+          if (data.quality_scores && data.quality_scores.length > 0) {
+            data.quality_scores.forEach((score) => {
+              const scoreValue = calculateRadioValue(
+                score.score,
+                score.criteria__max_points
+              );
+              const radio = document.querySelector(
+                `input[name="criteria_${score.criteria_id}"][value="${scoreValue}"]`
+              );
+              if (radio) {
+                radio.checked = true;
+              }
+            });
+          }
+          
+          // Set evaluation sheet data if available
+          if (data.has_evaluation_sheet) {
+            const evalSheet = data.evaluation_sheet;
+            
+            // For each evaluation criterion, set its value and max marks
+            for (const [criterion, values] of Object.entries(evalSheet)) {
+              // Skip non-criterion fields
+              if (criterion === 'total_marks' || criterion === 'total_max_marks' || criterion === 'percentage') {
+                continue;
+              }
+              
+              // Set the status dropdown
+              const statusSelect = document.querySelector(`select[name="eval_${criterion}"]`);
+              if (statusSelect && values.value) {
+                statusSelect.value = values.value;
+              }
+              
+              // Set the max marks input
+              const marksInput = document.querySelector(`input[name="eval_${criterion}_max"]`);
+              if (marksInput && values.max_marks) {
+                marksInput.value = values.max_marks;
+              }
             }
-          });
+          }
 
           // Show history if available
           if (data.history && data.history.length > 0) {
@@ -370,7 +531,9 @@ document.addEventListener("DOMContentLoaded", function () {
         }
       })
       .catch((error) => {
+        hideSpinner();
         console.error("Error:", error);
+        showAlert("Error loading signoff data. Please try again.", "danger");
       });
   }
 
@@ -529,6 +692,32 @@ document.addEventListener("DOMContentLoaded", function () {
     // Reset all criteria to "Meets Requirements"
     criteriaContainer.querySelectorAll('input[value="2"]').forEach((radio) => {
       radio.checked = true;
+    });
+    
+    // Reset evaluation sheet fields
+    
+    // Reset all evaluation status dropdowns to "Meets Requirements"
+    criteriaContainer.querySelectorAll('select[name^="eval_"]').forEach((select) => {
+      select.value = "MR";  // Meets Requirements
+    });
+    
+    // Reset max marks to their default values
+    const defaultMaxMarks = {
+      "eval_cleanliness_max": 5.0,
+      "eval_hardware_max": 10.0,
+      "eval_timeliness_max": 5.0,
+      "eval_student_preparation_max": 10.0,
+      "eval_code_implementation_max": 15.0,
+      "eval_commenting_max": 5.0,
+      "eval_schematic_max": 10.0,
+      "eval_course_participation_max": 5.0
+    };
+    
+    Object.entries(defaultMaxMarks).forEach(([inputName, defaultValue]) => {
+      const input = criteriaContainer.querySelector(`input[name="${inputName}"]`);
+      if (input) {
+        input.value = defaultValue;
+      }
     });
   }
 

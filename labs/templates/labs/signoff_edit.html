@@ -1,0 +1,303 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Edit Signoff{% endblock %}
+
+{% block extra_css %}
+<style>
+    .criteria-section, .evaluation-section {
+        margin-bottom: 2rem;
+    }
+    .card-header h3 {
+        margin-bottom: 0;
+    }
+    .form-label {
+        font-weight: 500;
+    }
+    .form-group {
+        margin-bottom: 1.5rem;
+    }
+    .quality-table th, .quality-table td {
+        vertical-align: middle;
+    }
+    .evaluation-table th, .evaluation-table td {
+        vertical-align: middle;
+    }
+    .header-row th {
+        background-color: #f8f9fa;
+    }
+    .btn-custom-success {
+        background-color: #28a745;
+        border-color: #28a745;
+        color: white;
+    }
+    .btn-custom-danger {
+        background-color: #dc3545;
+        border-color: #dc3545;
+        color: white;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1><i class="fas fa-edit me-2"></i>Edit Signoff</h1>
+                <div>
+                    <a href="{% url 'labs:signoff_detail' signoff.id %}" class="btn btn-outline-primary">
+                        <i class="fas fa-arrow-left me-1"></i> Back to Signoff Details
+                    </a>
+                </div>
+            </div>
+            <div class="text-muted mb-3">
+                <strong>Student:</strong> {{ signoff.student.name }} | 
+                <strong>Part:</strong> {{ signoff.part.lab.name }} - {{ signoff.part.name }}
+            </div>
+        </div>
+    </div>
+
+    <form method="post" action="{% url 'labs:signoff_edit' signoff.id %}">
+        {% csrf_token %}
+        
+        <div class="row">
+            <div class="col-md-4 mb-4">
+                <div class="card h-100">
+                    <div class="card-header bg-primary text-white">
+                        <h3 class="h5 mb-0"><i class="fas fa-info-circle me-2"></i>Basic Information</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="form-group">
+                            <label for="status" class="form-label">Status</label>
+                            <select name="status" id="status" class="form-select">
+                                <option value="approved" {% if signoff.status == 'approved' %}selected{% endif %}>Approved</option>
+                                <option value="rejected" {% if signoff.status == 'rejected' %}selected{% endif %}>Rejected</option>
+                                <option value="pending" {% if signoff.status == 'pending' %}selected{% endif %}>Pending</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="comments" class="form-label">Comments</label>
+                            <textarea name="comments" id="comments" class="form-control" rows="5">{{ signoff.comments }}</textarea>
+                            <div class="form-text">Enter any feedback, remarks, or notes about this signoff.</div>
+                        </div>
+                        
+                        <div class="form-group mb-0">
+                            <div class="d-grid gap-2">
+                                <button type="submit" class="btn btn-success">
+                                    <i class="fas fa-save me-1"></i> Save Changes
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-8">
+                <!-- Quality Criteria Section -->
+                <div class="card mb-4">
+                    <div class="card-header bg-primary text-white">
+                        <h3 class="h5 mb-0"><i class="fas fa-list-check me-2"></i>Quality Criteria</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-bordered quality-table">
+                                <thead>
+                                    <tr class="header-row">
+                                        <th style="width: 30%;">Criteria</th>
+                                        <th style="width: 10%;">Max Points</th>
+                                        <th style="width: 60%;" colspan="5">Score</th>
+                                    </tr>
+                                    <tr>
+                                        <th></th>
+                                        <th></th>
+                                        <th class="text-center">Not Applicable<br>(0%)</th>
+                                        <th class="text-center">Poor/Not Complete<br>(25%)</th>
+                                        <th class="text-center">Meets Requirements<br>(50%)</th>
+                                        <th class="text-center">Exceeds Requirements<br>(75%)</th>
+                                        <th class="text-center">Outstanding<br>(100%)</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for criteria in quality_criteria %}
+                                    <tr>
+                                        <td>{{ criteria.name }}</td>
+                                        <td class="text-center">{{ criteria.max_points }}</td>
+                                        {% with criteria_score=criteria.get_score_value %}
+                                        <td class="text-center">
+                                            <input type="radio" name="criteria_{{ criteria.id }}" value="0" {% if criteria_score == 0 %}checked{% endif %}>
+                                        </td>
+                                        <td class="text-center">
+                                            <input type="radio" name="criteria_{{ criteria.id }}" value="1" {% if criteria_score == 25 %}checked{% endif %}>
+                                        </td>
+                                        <td class="text-center">
+                                            <input type="radio" name="criteria_{{ criteria.id }}" value="2" {% if criteria_score == 50 %}checked{% endif %}>
+                                        </td>
+                                        <td class="text-center">
+                                            <input type="radio" name="criteria_{{ criteria.id }}" value="3" {% if criteria_score == 75 %}checked{% endif %}>
+                                        </td>
+                                        <td class="text-center">
+                                            <input type="radio" name="criteria_{{ criteria.id }}" value="4" {% if criteria_score == 100 %}checked{% endif %}>
+                                        </td>
+                                        {% endwith %}
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Evaluation Sheet Section -->
+                <div class="card">
+                    <div class="card-header bg-primary text-white">
+                        <h3 class="h5 mb-0"><i class="fas fa-check-square me-2"></i>Evaluation Sheet</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-bordered evaluation-table">
+                                <thead>
+                                    <tr class="header-row">
+                                        <th style="width: 25%;">Criterion</th>
+                                        <th style="width: 15%;">Max Marks</th>
+                                        <th style="width: 60%;">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>Cleanliness</td>
+                                        <td>
+                                            <input type="number" name="eval_cleanliness_max" class="form-control" step="0.5" min="0" value="{{ evaluation_sheet.cleanliness_max_marks|default:'5.0' }}">
+                                        </td>
+                                        <td>
+                                            <select name="eval_cleanliness" class="form-select">
+                                                <option value="ER" {% if evaluation_sheet.cleanliness == 'ER' %}selected{% endif %}>Exceeds Requirements</option>
+                                                <option value="MR" {% if evaluation_sheet.cleanliness == 'MR' %}selected{% endif %}>Meets Requirements</option>
+                                                <option value="MM" {% if evaluation_sheet.cleanliness == 'MM' %}selected{% endif %}>Minimally Meets</option>
+                                                <option value="IR" {% if evaluation_sheet.cleanliness == 'IR' %}selected{% endif %}>Improvement Required</option>
+                                                <option value="ND" {% if evaluation_sheet.cleanliness == 'ND' %}selected{% endif %}>Not Demonstrated</option>
+                                            </select>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>Hardware</td>
+                                        <td>
+                                            <input type="number" name="eval_hardware_max" class="form-control" step="0.5" min="0" value="{{ evaluation_sheet.hardware_max_marks|default:'10.0' }}">
+                                        </td>
+                                        <td>
+                                            <select name="eval_hardware" class="form-select">
+                                                <option value="ER" {% if evaluation_sheet.hardware == 'ER' %}selected{% endif %}>Exceeds Requirements</option>
+                                                <option value="MR" {% if evaluation_sheet.hardware == 'MR' %}selected{% endif %}>Meets Requirements</option>
+                                                <option value="MM" {% if evaluation_sheet.hardware == 'MM' %}selected{% endif %}>Minimally Meets</option>
+                                                <option value="IR" {% if evaluation_sheet.hardware == 'IR' %}selected{% endif %}>Improvement Required</option>
+                                                <option value="ND" {% if evaluation_sheet.hardware == 'ND' %}selected{% endif %}>Not Demonstrated</option>
+                                            </select>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>Timeliness</td>
+                                        <td>
+                                            <input type="number" name="eval_timeliness_max" class="form-control" step="0.5" min="0" value="{{ evaluation_sheet.timeliness_max_marks|default:'5.0' }}">
+                                        </td>
+                                        <td>
+                                            <select name="eval_timeliness" class="form-select">
+                                                <option value="ER" {% if evaluation_sheet.timeliness == 'ER' %}selected{% endif %}>Exceeds Requirements</option>
+                                                <option value="MR" {% if evaluation_sheet.timeliness == 'MR' %}selected{% endif %}>Meets Requirements</option>
+                                                <option value="MM" {% if evaluation_sheet.timeliness == 'MM' %}selected{% endif %}>Minimally Meets</option>
+                                                <option value="IR" {% if evaluation_sheet.timeliness == 'IR' %}selected{% endif %}>Improvement Required</option>
+                                                <option value="ND" {% if evaluation_sheet.timeliness == 'ND' %}selected{% endif %}>Not Demonstrated</option>
+                                            </select>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>Student Preparation</td>
+                                        <td>
+                                            <input type="number" name="eval_student_preparation_max" class="form-control" step="0.5" min="0" value="{{ evaluation_sheet.student_preparation_max_marks|default:'10.0' }}">
+                                        </td>
+                                        <td>
+                                            <select name="eval_student_preparation" class="form-select">
+                                                <option value="ER" {% if evaluation_sheet.student_preparation == 'ER' %}selected{% endif %}>Exceeds Requirements</option>
+                                                <option value="MR" {% if evaluation_sheet.student_preparation == 'MR' %}selected{% endif %}>Meets Requirements</option>
+                                                <option value="MM" {% if evaluation_sheet.student_preparation == 'MM' %}selected{% endif %}>Minimally Meets</option>
+                                                <option value="IR" {% if evaluation_sheet.student_preparation == 'IR' %}selected{% endif %}>Improvement Required</option>
+                                                <option value="ND" {% if evaluation_sheet.student_preparation == 'ND' %}selected{% endif %}>Not Demonstrated</option>
+                                            </select>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>Code Implementation</td>
+                                        <td>
+                                            <input type="number" name="eval_code_implementation_max" class="form-control" step="0.5" min="0" value="{{ evaluation_sheet.code_implementation_max_marks|default:'15.0' }}">
+                                        </td>
+                                        <td>
+                                            <select name="eval_code_implementation" class="form-select">
+                                                <option value="ER" {% if evaluation_sheet.code_implementation == 'ER' %}selected{% endif %}>Exceeds Requirements</option>
+                                                <option value="MR" {% if evaluation_sheet.code_implementation == 'MR' %}selected{% endif %}>Meets Requirements</option>
+                                                <option value="MM" {% if evaluation_sheet.code_implementation == 'MM' %}selected{% endif %}>Minimally Meets</option>
+                                                <option value="IR" {% if evaluation_sheet.code_implementation == 'IR' %}selected{% endif %}>Improvement Required</option>
+                                                <option value="ND" {% if evaluation_sheet.code_implementation == 'ND' %}selected{% endif %}>Not Demonstrated</option>
+                                            </select>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>Commenting</td>
+                                        <td>
+                                            <input type="number" name="eval_commenting_max" class="form-control" step="0.5" min="0" value="{{ evaluation_sheet.commenting_max_marks|default:'5.0' }}">
+                                        </td>
+                                        <td>
+                                            <select name="eval_commenting" class="form-select">
+                                                <option value="ER" {% if evaluation_sheet.commenting == 'ER' %}selected{% endif %}>Exceeds Requirements</option>
+                                                <option value="MR" {% if evaluation_sheet.commenting == 'MR' %}selected{% endif %}>Meets Requirements</option>
+                                                <option value="MM" {% if evaluation_sheet.commenting == 'MM' %}selected{% endif %}>Minimally Meets</option>
+                                                <option value="IR" {% if evaluation_sheet.commenting == 'IR' %}selected{% endif %}>Improvement Required</option>
+                                                <option value="ND" {% if evaluation_sheet.commenting == 'ND' %}selected{% endif %}>Not Demonstrated</option>
+                                            </select>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>Schematic</td>
+                                        <td>
+                                            <input type="number" name="eval_schematic_max" class="form-control" step="0.5" min="0" value="{{ evaluation_sheet.schematic_max_marks|default:'10.0' }}">
+                                        </td>
+                                        <td>
+                                            <select name="eval_schematic" class="form-select">
+                                                <option value="ER" {% if evaluation_sheet.schematic == 'ER' %}selected{% endif %}>Exceeds Requirements</option>
+                                                <option value="MR" {% if evaluation_sheet.schematic == 'MR' %}selected{% endif %}>Meets Requirements</option>
+                                                <option value="MM" {% if evaluation_sheet.schematic == 'MM' %}selected{% endif %}>Minimally Meets</option>
+                                                <option value="IR" {% if evaluation_sheet.schematic == 'IR' %}selected{% endif %}>Improvement Required</option>
+                                                <option value="ND" {% if evaluation_sheet.schematic == 'ND' %}selected{% endif %}>Not Demonstrated</option>
+                                            </select>
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td>Course Participation</td>
+                                        <td>
+                                            <input type="number" name="eval_course_participation_max" class="form-control" step="0.5" min="0" value="{{ evaluation_sheet.course_participation_max_marks|default:'5.0' }}">
+                                        </td>
+                                        <td>
+                                            <select name="eval_course_participation" class="form-select">
+                                                <option value="ER" {% if evaluation_sheet.course_participation == 'ER' %}selected{% endif %}>Exceeds Requirements</option>
+                                                <option value="MR" {% if evaluation_sheet.course_participation == 'MR' %}selected{% endif %}>Meets Requirements</option>
+                                                <option value="MM" {% if evaluation_sheet.course_participation == 'MM' %}selected{% endif %}>Minimally Meets</option>
+                                                <option value="IR" {% if evaluation_sheet.course_participation == 'IR' %}selected{% endif %}>Improvement Required</option>
+                                                <option value="ND" {% if evaluation_sheet.course_participation == 'ND' %}selected{% endif %}>Not Demonstrated</option>
+                                            </select>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="d-grid gap-2 mt-4">
+                            <button type="submit" class="btn btn-success btn-lg">
+                                <i class="fas fa-save me-1"></i> Save All Changes
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+{% endblock %}
