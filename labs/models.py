@@ -130,6 +130,13 @@ class Lab(models.Model):
     grade_scale = models.ForeignKey(GradeScale, on_delete=models.SET_NULL, null=True, blank=True, 
                                     related_name='labs', help_text="Grade scale to use for this lab")
     
+    def get_max_score(self):
+        """Calculate the total maximum score for this lab based on all parts."""
+        total = Decimal('0')
+        for part in self.parts.all():
+            total += part.get_max_score()
+        return total
+    
     def __str__(self):
         return f"ECEN5613 - {self.name}"
         
@@ -140,26 +147,24 @@ class Lab(models.Model):
         # Get all parts for this lab
         parts = self.parts.all()
         
-        # For each part, get the student's score
+        # Sum up actual scores for all parts
         for part in parts:
-            # Get the max contribution this part can make to the lab grade
-            part_contribution = part.get_contribution_to_lab()
+            # Get the student's score for this part
+            student_score = part.get_student_score(student)
             
-            # Get the student's percentage score for this part
-            part_percentage = Decimal(str(part.get_student_percentage(student))) / Decimal('100')
-            
-            # Add the weighted score to the total
-            total_score += part_contribution * part_percentage
+            # Add to total
+            total_score += student_score
             
         return total_score
         
     def get_student_percentage(self, student):
         """Get a student's percentage score for this lab."""
-        if self.total_points == 0:
+        max_score = self.get_max_score()
+        if max_score == 0:
             return Decimal('0')
             
         score = self.get_student_score(student)
-        return (score / self.total_points) * Decimal('100')
+        return (score / max_score) * Decimal('100')
         
     def get_grade_letter(self, student):
         """Convert percentage to letter grade using the lab's grade scale or default scale."""
@@ -183,20 +188,89 @@ class Part(models.Model):
     def __str__(self):
         return f"{self.lab.name} - {self.name}"
         
+    def save(self, *args, **kwargs):
+        """Override save to ensure each part has quality criteria."""
+        is_new = self.pk is None
+        super().save(*args, **kwargs)
+        
+        # After saving a new part, automatically create default criteria
+        if is_new:
+            self.create_default_criteria()
+            
+    def create_default_criteria(self):
+        """Create default quality criteria for this part if none exist."""
+        # Check if part already has criteria
+        if self.quality_criteria.exists():
+            return
+            
+        # Default criteria definitions
+        default_criteria = [
+            {"name": "Code Quality", "description": "Code is well-organized, efficient, and follows best practices", "max_points": 10, "weight": 1.0},
+            {"name": "Hardware Implementation", "description": "Hardware components are connected correctly and functioning properly", "max_points": 10, "weight": 1.0},
+            {"name": "Documentation", "description": "Code is well-documented with comments explaining functionality", "max_points": 10, "weight": 0.8},
+            {"name": "Understanding", "description": "Student demonstrates understanding of concepts and implementation", "max_points": 10, "weight": 1.0},
+            {"name": "Functionality", "description": "All required functionality is working correctly", "max_points": 10, "weight": 1.0},
+        ]
+        
+        # Create each criteria
+        for criteria in default_criteria:
+            QualityCriteria.objects.create(
+                part=self,
+                name=criteria["name"],
+                description=criteria["description"],
+                max_points=criteria["max_points"],
+                weight=criteria["weight"]
+            )
+        
     def get_max_score(self):
         """Get the maximum possible score for this part."""
-        # Sum up weights of all quality criteria
-        criteria = self.quality_criteria.all()
-        if not criteria:
-            return 0
+        total_score = Decimal('0')
         
-        return sum(c.max_points for c in criteria)
+        # Get quality criteria score potential
+        criteria = self.quality_criteria.all()
+        if criteria:
+            total_score += sum(Decimal(str(c.max_points)) for c in criteria)
+        
+        # Check if any signoffs for this part have evaluation sheets
+        found_eval_sheet = False
+        signoffs = self.signoffs.all()
+        for signoff in signoffs:
+            try:
+                eval_sheet = signoff.evaluation_sheet.first()
+                if eval_sheet and hasattr(eval_sheet, 'rubric') and eval_sheet.rubric:
+                    total_score += eval_sheet.get_total_max_marks()
+                    found_eval_sheet = True
+                    break  # We just need one evaluation sheet to get the max marks
+            except:
+                pass
+                
+        # If no evaluation sheets found, use default rubric
+        if not found_eval_sheet:
+            # Get default rubric's max marks
+            default_rubric = EvaluationRubric.get_default_rubric()
+            total_score += default_rubric.get_total_max_marks()
+            
+        return total_score
         
     def get_student_score(self, student):
         """Get a student's score for this part."""
         # First check if there's a signoff
         try:
             signoff = Signoff.objects.get(student=student, part=self, status='approved')
+            
+            # Check if evaluation sheet exists, create one if not
+            eval_sheet = signoff.evaluation_sheet.first()
+            if not eval_sheet:
+                # Create a default evaluation sheet with default values
+                rubric = EvaluationRubric.get_default_rubric()
+                # Initialize with "Meets Requirements" (MR) for all criteria
+                default_evaluations = {key: 'MR' for key in rubric.criteria_data.keys()}
+                EvaluationSheet.objects.create(
+                    signoff=signoff,
+                    rubric=rubric,
+                    evaluations=default_evaluations
+                )
+            
             return signoff.get_total_quality_score()
         except Signoff.DoesNotExist:
             return 0
@@ -222,13 +296,24 @@ class Part(models.Model):
         
     def get_contribution_to_lab(self):
         """Calculate how many points this part contributes to the overall lab grade."""
-        # Get count of parts in this lab
-        parts_count = Part.objects.filter(lab=self.lab).count()
-        if parts_count == 0:
-            return 0
-            
-        # Each part is worth an equal fraction of the lab's total points
-        return self.lab.total_points / parts_count
+        # Get max score for this part
+        part_max_score = self.get_max_score()
+        
+        # Get all parts for this lab
+        lab_parts = Part.objects.filter(lab=self.lab)
+        
+        # Calculate the sum of max scores for all parts in the lab
+        total_max_score = sum(p.get_max_score() for p in lab_parts)
+        
+        if total_max_score == 0:
+            # If no parts have scores defined, divide equally
+            parts_count = lab_parts.count()
+            if parts_count == 0:
+                return 0
+            return self.lab.total_points / parts_count
+        
+        # Part's contribution is proportional to its max score relative to the total
+        return (part_max_score / total_max_score) * self.lab.total_points
     
 class QualityCriteria(models.Model):
     """Model representing grading criteria for a part."""
@@ -339,23 +424,46 @@ class Signoff(models.Model):
     
     def get_total_quality_score(self):
         """Get the total score based on quality criteria."""
-        scores = self.quality_scores.all()
+        # Get quality criteria for this part
+        criteria = QualityCriteria.objects.filter(part=self.part)
         quality_score = Decimal('0')
         
-        if scores:
-            # Sum up all quality scores
-            quality_score = sum(Decimal(str(score.score)) for score in scores)
+        # Get existing quality scores
+        scores = self.quality_scores.all()
         
-        # Check if there's an evaluation sheet, and add its score if present
-        try:
-            evaluation = self.evaluation_sheet.first()
-            if evaluation:
-                # Add evaluation sheet score to quality score
-                return quality_score + evaluation.get_earned_marks()
-        except:
-            pass
-            
-        return quality_score
+        # Create a mapping of criteria ID to score for easy access
+        score_map = {score.criteria_id: Decimal(str(score.score)) for score in scores}
+        
+        # Sum up scores for all quality criteria - create default scores if missing
+        for criterion in criteria:
+            if criterion.id in score_map:
+                quality_score += score_map[criterion.id]
+            else:
+                # Create a default score (50% of max points) for missing criteria
+                default_score = Decimal(str(criterion.max_points)) * Decimal('0.5')
+                quality_score += default_score
+                
+                # Create the missing score record
+                QualityScore.objects.create(
+                    signoff=self,
+                    criteria=criterion,
+                    score=int(default_score)
+                )
+        
+        # Check if there's an evaluation sheet, create if missing
+        evaluation = self.evaluation_sheet.first()
+        if not evaluation:
+            # Create default evaluation sheet
+            rubric = EvaluationRubric.get_default_rubric()
+            default_evaluations = {key: 'MR' for key in rubric.criteria_data.keys()}
+            evaluation = EvaluationSheet.objects.create(
+                signoff=self,
+                rubric=rubric,
+                evaluations=default_evaluations
+            )
+        
+        # Add evaluation sheet score to quality score
+        return quality_score + evaluation.get_earned_marks()
     
     def get_max_quality_score(self):
         """Get the maximum possible score based on quality criteria."""
@@ -366,16 +474,20 @@ class Signoff(models.Model):
             # Sum up maximum points for all criteria
             max_quality_score = sum(Decimal(str(c.max_points)) for c in criteria)
         
-        # Check if there's an evaluation sheet, and add its max score if present
-        try:
-            evaluation = self.evaluation_sheet.first()
-            if evaluation:
-                # Add evaluation sheet max score
-                return max_quality_score + evaluation.get_total_max_marks()
-        except:
-            pass
-            
-        return max_quality_score
+        # Check if there's an evaluation sheet, create if missing
+        evaluation = self.evaluation_sheet.first()
+        if not evaluation:
+            # Create default evaluation sheet
+            rubric = EvaluationRubric.get_default_rubric()
+            default_evaluations = {key: 'MR' for key in rubric.criteria_data.keys()}
+            evaluation = EvaluationSheet.objects.create(
+                signoff=self,
+                rubric=rubric,
+                evaluations=default_evaluations
+            )
+        
+        # Add evaluation sheet max score
+        return max_quality_score + evaluation.get_total_max_marks()
     
     def get_quality_percentage(self):
         """Get the quality score as a percentage."""

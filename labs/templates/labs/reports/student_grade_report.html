@@ -162,7 +162,7 @@
                                         </div>
                                     </div>
                                     <p>
-                                        <strong>{{ lab_data.earned_points|floatformat:2 }}</strong> / {{ lab_data.lab.total_points }} points
+                                        <strong>{{ lab_data.earned_points|floatformat:2 }}</strong> / {{ lab_data.max_points|floatformat:2 }} points
                                         <span class="badge bg-primary ms-2" title="Using {% if lab_data.lab.grade_scale %}{{ lab_data.lab.grade_scale.name }}{% else %}Default Grade Scale{% endif %}">{{ lab_data.letter_grade|default:"N/A" }}</span>
                                     </p>
                                 </div>

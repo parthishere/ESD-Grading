@@ -64,7 +64,7 @@ document.addEventListener("DOMContentLoaded", function () {
     studentName.textContent = student.name;
     studentEmail.textContent = student.email || "No email provided";
     studentInfo.style.display = "block";
-    studentIdInput.value = student.student_id;
+    studentIdInput.value = student.id; // Use the primary key ID
 
     // Load parts if lab is already selected
     if (labSelect.value) {
@@ -186,7 +186,7 @@ document.addEventListener("DOMContentLoaded", function () {
     if (!currentStudent) return;
 
     fetch(
-      `/api/get-signoffs/?student_id=${currentStudent.studentId}&lab_id=${labId}`
+      `/api/get-signoffs/?student_id=${currentStudent.id}&lab_id=${labId}`
     )
       .then((response) => response.json())
       .then((data) => {
@@ -240,29 +240,25 @@ document.addEventListener("DOMContentLoaded", function () {
 
         currentCriteria = data;
 
-        // Check if data has criteria
-        if (data && (data.criteria || data.rubric_criteria)) {
-          // Render criteria
-          renderCriteria(data.criteria || []);
+        // Always render the form, even if no criteria - backend will create default criteria if needed
+        // Update form headers
+        const selectedLab = labSelect.options[labSelect.selectedIndex].text;
+        gradingHeader.textContent = partName;
+        labBadge.textContent = selectedLab;
 
-          // Update form headers
-          const selectedLab = labSelect.options[labSelect.selectedIndex].text;
-          gradingHeader.textContent = partName;
-          labBadge.textContent = selectedLab;
+        // Set part ID in form
+        partIdInput.value = partId;
 
-          // Set part ID in form
-          partIdInput.value = partId;
+        // Render criteria - if no criteria data, default empty array will trigger default criteria rendering
+        renderCriteria(data && data.criteria ? data.criteria : []);
 
-          // Show the grading form, hide initial message
-          initialMessage.style.display = "none";
-          gradingForm.style.display = "block";
+        // Show the grading form, hide initial message
+        initialMessage.style.display = "none";
+        gradingForm.style.display = "block";
 
-          // Check for existing signoff for this student and part
-          if (currentStudent) {
-            checkExistingSignoff(partId);
-          }
-        } else {
-          showAlert("No grading criteria found for this part", "warning");
+        // Check for existing signoff for this student and part
+        if (currentStudent) {
+          checkExistingSignoff(partId);
         }
       })
       .catch((error) => {
@@ -364,17 +360,29 @@ document.addEventListener("DOMContentLoaded", function () {
    * Render evaluation sheet form
    */
   function renderEvaluationSheet() {
-    // Define evaluation criteria with their default max marks
-    const evaluationCriteria = [
-      { id: "cleanliness", name: "Cleanliness", max_marks: 5.0 },
-      { id: "hardware", name: "Hardware", max_marks: 10.0 },
-      { id: "timeliness", name: "Timeliness", max_marks: 5.0 },
-      { id: "student_preparation", name: "Student Preparation", max_marks: 10.0 },
-      { id: "code_implementation", name: "Code Implementation", max_marks: 15.0 },
-      { id: "commenting", name: "Commenting", max_marks: 5.0 },
-      { id: "schematic", name: "Schematic", max_marks: 10.0 },
-      { id: "course_participation", name: "Course Participation", max_marks: 5.0 },
-    ];
+    // Get evaluation criteria from the current criteria data if available, else use defaults
+    let evaluationCriteria = [];
+    
+    if (currentCriteria && currentCriteria.rubric_criteria && currentCriteria.rubric_criteria.length > 0) {
+      // Use criteria from API response
+      evaluationCriteria = currentCriteria.rubric_criteria.map(criterion => ({
+        id: criterion.key,
+        name: criterion.name,
+        max_marks: criterion.max_marks
+      }));
+    } else {
+      // Use default criteria if none available from API
+      evaluationCriteria = [
+        { id: "cleanliness", name: "Cleanliness", max_marks: 5.0 },
+        { id: "hardware", name: "Hardware", max_marks: 10.0 },
+        { id: "timeliness", name: "Timeliness", max_marks: 5.0 },
+        { id: "student_preparation", name: "Student Preparation", max_marks: 10.0 },
+        { id: "code_implementation", name: "Code Implementation", max_marks: 15.0 },
+        { id: "commenting", name: "Commenting", max_marks: 5.0 },
+        { id: "schematic", name: "Schematic", max_marks: 10.0 },
+        { id: "course_participation", name: "Course Participation", max_marks: 5.0 },
+      ];
+    }
 
     // Define status options
     const statusOptions = [
@@ -483,7 +491,7 @@ document.addEventListener("DOMContentLoaded", function () {
     showSpinner();
     
     fetch(
-      `/api/get-signoff-details/?student_id=${currentStudent.studentId}&part_id=${partId}`
+      `/api/get-signoff-details/?student_id=${currentStudent.id}&part_id=${partId}`
     )
       .then((response) => response.json())
       .then((data) => {
@@ -682,6 +690,9 @@ document.addEventListener("DOMContentLoaded", function () {
       }
     });
 
+    // Log form data for debugging
+    console.log("Submitting form data:", formData);
+    
     // AJAX call to submit signoff
     fetch("/api/quick-signoff/", {
       method: "POST",
@@ -691,9 +702,25 @@ document.addEventListener("DOMContentLoaded", function () {
         "Content-Type": "application/json"
       },
     })
-      .then((response) => response.json())
+      .then((response) => {
+        if (!response.ok) {
+          // Log the error status
+          console.error("Server responded with error status:", response.status);
+          return response.text().then(text => {
+            try {
+              // Try to parse as JSON first
+              return Promise.reject(JSON.parse(text));
+            } catch (e) {
+              // If not JSON, return the raw text
+              return Promise.reject(new Error(text || "Server error occurred"));
+            }
+          });
+        }
+        return response.json();
+      })
       .then((data) => {
         hideSpinner();
+        console.log("Server response:", data);
 
         if (data.success) {
           // Show success modal
@@ -704,21 +731,28 @@ document.addEventListener("DOMContentLoaded", function () {
             `status-${partIdInput.value}`
           );
           if (statusBadge) {
-            const status =
-              data.status ||
-              getStatusFromOverallScore(formData.get("overall_score"));
+            const status = "approved"; // Always approved on success
             statusBadge.className = `status-badge ${status}`;
             statusBadge.textContent =
               status.charAt(0).toUpperCase() + status.slice(1);
           }
         } else {
-          showAlert(data.message || "Error submitting signoff", "danger");
+          showAlert(data.message || data.error || "Error submitting signoff", "danger");
         }
       })
       .catch((error) => {
         hideSpinner();
-        console.error("Error:", error);
-        showAlert("Error submitting signoff", "danger");
+        console.error("Error submitting signoff:", error);
+        
+        // Show a more detailed error message if available
+        let errorMessage = "Error submitting signoff";
+        if (error.error) {
+          errorMessage += ": " + error.error;
+        } else if (error.message) {
+          errorMessage += ": " + error.message;
+        }
+        
+        showAlert(errorMessage, "danger");
       });
   }
 

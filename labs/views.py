@@ -201,8 +201,14 @@ def get_existing_signoff(request):
         return JsonResponse([])
     
     try:
-        # Get student and lab
-        student = Student.objects.get(student_id=student_id)
+        # Get student and lab - try by primary key first, then by student_id field
+        try:
+            # Try to get by primary key first
+            student = Student.objects.get(pk=student_id)
+        except (Student.DoesNotExist, ValueError):
+            # If that fails, try to get by student_id field
+            student = Student.objects.get(student_id=student_id)
+            
         lab = Lab.objects.get(pk=lab_id)
         
         # Get all parts for this lab
@@ -266,6 +272,13 @@ def get_criteria(request):
         part = Part.objects.get(pk=part_id)
         criteria = part.quality_criteria.all()
         
+        # If no criteria exist, create default criteria
+        if not criteria.exists():
+            print(f"No criteria found for part {part_id}, creating defaults...")
+            part.create_default_criteria()
+            # Refresh the criteria after creating defaults
+            criteria = part.quality_criteria.all()
+        
         criteria_data = []
         for criterion in criteria:
             criteria_data.append({
@@ -311,6 +324,9 @@ def quick_signoff_submit(request):
     
     # Get form data
     try:
+        # Log the raw request body for debugging
+        print(f"Raw request body: {request.body}")
+        
         data = json.loads(request.body)
         student_id = data.get('student_id')
         part_id = data.get('part_id')
@@ -319,13 +335,32 @@ def quick_signoff_submit(request):
         criteria_scores = data.get('criteria_scores', {})
         rubric_evaluations = data.get('rubric_evaluations', {})
         
+        # Log the parsed data for debugging
+        print(f"Parsed data: student_id={student_id}, part_id={part_id}")
+        print(f"criteria_scores: {criteria_scores}")
+        print(f"rubric_evaluations: {rubric_evaluations}")
+        
         # Validate required fields
         if not student_id or not part_id:
             return JsonResponse({'success': False, 'error': 'Missing required fields'}, status=400)
         
         # Get student and part
-        student = Student.objects.get(pk=student_id)
-        part = Part.objects.get(pk=part_id)
+        try:
+            student = Student.objects.get(pk=student_id)
+        except Student.DoesNotExist:
+            print(f"Student with ID {student_id} not found")
+            return JsonResponse({'success': False, 'error': f'Student with ID {student_id} not found'}, status=404)
+            
+        try:
+            part = Part.objects.get(pk=part_id)
+        except Part.DoesNotExist:
+            print(f"Part with ID {part_id} not found")
+            return JsonResponse({'success': False, 'error': f'Part with ID {part_id} not found'}, status=404)
+        
+        # Check if part has quality criteria, create if not
+        if not part.quality_criteria.exists():
+            print(f"Part {part_id} has no quality criteria, creating defaults...")
+            part.create_default_criteria()
         
         # Check if a signoff already exists for this student and part
         signoff, created = Signoff.objects.get_or_create(
@@ -347,15 +382,32 @@ def quick_signoff_submit(request):
         
         # Save quality criteria scores
         for criteria_id, score in criteria_scores.items():
-            criteria = QualityCriteria.objects.get(pk=criteria_id)
-            quality_score, _ = QualityScore.objects.update_or_create(
-                signoff=signoff,
-                criteria=criteria,
-                defaults={'score': score}
-            )
+            try:
+                criteria = QualityCriteria.objects.get(pk=criteria_id)
+                # Convert score to integer if it's a string
+                if isinstance(score, str):
+                    score = int(score)
+                quality_score, _ = QualityScore.objects.update_or_create(
+                    signoff=signoff,
+                    criteria=criteria,
+                    defaults={'score': score}
+                )
+            except QualityCriteria.DoesNotExist:
+                print(f"Quality criteria with ID {criteria_id} not found")
+                # Skip invalid criteria IDs
+                continue
+            except Exception as e:
+                print(f"Error saving quality score for criteria {criteria_id}: {str(e)}")
+                # Skip errors and continue
+                continue
         
         # Create or update evaluation sheet with the fixed rubric
         rubric = EvaluationRubric.get_default_rubric()
+        
+        # If no rubric evaluations provided, create default ones
+        if not rubric_evaluations:
+            rubric_evaluations = {key: 'MR' for key in rubric.criteria_data.keys()}
+        
         eval_sheet, _ = EvaluationSheet.objects.get_or_create(
             signoff=signoff,
             defaults={
@@ -373,14 +425,17 @@ def quick_signoff_submit(request):
         return JsonResponse({
             'success': True,
             'signoff_id': signoff.id,
+            'status': 'approved',
             'message': 'Signoff successfully submitted'
         })
         
-    except (Student.DoesNotExist, Part.DoesNotExist, QualityCriteria.DoesNotExist) as e:
-        return JsonResponse({'success': False, 'error': str(e)}, status=404)
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
+        print(f"JSON Decode Error: {str(e)}")
         return JsonResponse({'success': False, 'error': 'Invalid JSON data'}, status=400)
     except Exception as e:
+        print(f"Error in signoff submission: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 @login_required
@@ -393,8 +448,14 @@ def get_signoff_details(request):
         return JsonResponse({'found': False})
     
     try:
-        # Get student and part
-        student = Student.objects.get(student_id=student_id)
+        # Get student and part - try by primary key first, then by student_id field
+        try:
+            # Try to get by primary key first
+            student = Student.objects.get(pk=student_id)
+        except (Student.DoesNotExist, ValueError):
+            # If that fails, try to get by student_id field
+            student = Student.objects.get(student_id=student_id)
+            
         part = Part.objects.get(pk=part_id)
         
         # Check if signoff exists
@@ -824,17 +885,19 @@ def student_grade_report(request, student_id=None):
         
         # Process each lab
         for lab in labs:
+            lab_max_score = lab.get_max_score()
             lab_data = {
                 'lab': lab,
                 'parts': [],
                 'earned_points': lab.get_student_score(student),
+                'max_points': lab_max_score,
                 'completion_percentage': lab.get_student_percentage(student),
                 'letter_grade': lab.get_grade_letter(student)
             }
             
             # Add to student total
             student_data['earned_points'] += lab_data['earned_points']
-            student_data['total_points'] += lab.total_points
+            student_data['total_points'] += lab_max_score
             
             # Process each part in the lab
             for part in lab.parts.all().order_by('order'):
@@ -978,7 +1041,8 @@ def export_lab_csv(request, lab_id):
     writer.writerow(['Lab', lab.name])
     writer.writerow(['Description', lab.description])
     writer.writerow(['Due Date', lab.due_date.strftime('%Y-%m-%d %H:%M')])
-    writer.writerow(['Total Points', str(lab.total_points)])
+    writer.writerow(['Max Points (Calculated)', str(lab.get_max_score())])
+    writer.writerow(['Total Points (Configured)', str(lab.total_points)])
     writer.writerow(['Grade Scale', grade_scale_name])
     writer.writerow([])  # Empty row as separator
     
@@ -1063,7 +1127,9 @@ def export_lab_csv(request, lab_id):
             row.append(criteria_dict.get(criteria_key, "N/A"))
         
         # Add total scores
-        row.append(f"{lab.get_student_score(student)}/{lab.total_points}")
+        max_score = lab.get_max_score()
+        student_score = lab.get_student_score(student)
+        row.append(f"{student_score}/{max_score}")
         row.append(f"{lab.get_student_percentage(student):.2f}%")
         row.append(lab.get_grade_letter(student))
         
