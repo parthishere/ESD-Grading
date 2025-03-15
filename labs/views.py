@@ -799,7 +799,7 @@ def ta_report(request):
     
     # Get signoffs for today
     today = timezone.now().date()
-    signoffs_today = signoffs.filter(signed_date__date=today).count()
+    signoffs_today = signoffs.filter(date_submitted__date=today).count()
     
     # Get total signoffs
     total_signoffs = signoffs.count()
@@ -813,7 +813,7 @@ def ta_report(request):
         instructor_signoff_count = instructor_signoffs.count()
         
         # Get signoffs by this instructor today
-        instructor_signoffs_today = instructor_signoffs.filter(signed_date__date=today).count()
+        instructor_signoffs_today = instructor_signoffs.filter(date_submitted__date=today).count()
         
         # Get average rating if any
         avg_rating = 0
@@ -822,8 +822,8 @@ def ta_report(request):
             avg_rating = 4.5
         
         # Get the last signoff date
-        last_signoff = instructor_signoffs.order_by('-signed_date').first()
-        last_signoff_date = last_signoff.signed_date if last_signoff else None
+        last_signoff = instructor_signoffs.order_by('-date_submitted').first()
+        last_signoff_date = last_signoff.date_submitted if last_signoff else None
         
         # Get parts this instructor has signed off on
         signed_parts = Part.objects.filter(signoffs__instructor=instructor, signoffs__status='approved').distinct()
@@ -1467,11 +1467,11 @@ def export_student_grade_csv(request, student_id=None):
             else:
                 row.append("N/A")
         
-        # Add overall scores
+        # Add overall scores calculated from student model
         overall_grade = student.get_overall_grade()
-        row.append(f"{student.get_overall_grade():.2f}%")
-        row.append(f"{overall_grade:.2f}%")
-        row.append(student.get_course_letter_grade())
+        row.append(f"{earned_points}/{total_points}")  # Raw points
+        row.append(f"{overall_grade:.2f}%")  # Percentage
+        row.append(student.get_course_letter_grade())  # Letter grade
         
         writer.writerow(row)
     

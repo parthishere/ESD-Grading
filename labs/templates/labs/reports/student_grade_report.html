@@ -125,6 +125,10 @@
                                     <strong>{{ student_data.earned_points|floatformat:2 }}</strong> / {{ student_data.total_points|floatformat:2 }} points
                                     <span class="badge bg-primary ms-2" title="Using Default Grade Scale">{{ student_data.student.get_course_letter_grade }}</span>
                                 </p>
+                                <p class="text-muted small">
+                                    <i class="fas fa-info-circle"></i> 
+                                    Grade based on earned points across all labs
+                                </p>
                             </div>
                         </div>
                     </div>

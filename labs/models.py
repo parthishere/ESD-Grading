@@ -383,8 +383,12 @@ class Student(models.Model):
         earned_points = Decimal('0')
         
         for lab in labs:
-            total_points += lab.total_points
-            earned_points += lab.get_student_score(self)
+            # Use the lab's calculated max score, not the configured total_points
+            max_score = lab.get_max_score()
+            earned_score = lab.get_student_score(self)
+            
+            total_points += max_score
+            earned_points += earned_score
             
         if total_points == 0:
             return Decimal('0')
