@@ -3,6 +3,7 @@ from django.contrib.auth.models import User, Group, Permission
 from django.core.validators import MinValueValidator, MaxValueValidator
 from django.contrib.contenttypes.models import ContentType
 from decimal import Decimal
+import json
 
 class UserRole(models.Model):
     """Model representing user roles in the system."""
@@ -375,7 +376,64 @@ class QualityScore(models.Model):
         return (self.score / self.criteria.max_points) * 100
     
 
+class EvaluationRubric(models.Model):
+    """Model representing a reusable evaluation rubric that can be applied across different labs/signoffs."""
+    name = models.CharField(max_length=100, unique=True)
+    description = models.TextField(blank=True)
+    is_default = models.BooleanField(default=False)
+    
+    # Store criteria as serialized JSON
+    criteria_data = models.JSONField(default=dict)
+    
+    class Meta:
+        verbose_name = "Evaluation Rubric"
+        verbose_name_plural = "Evaluation Rubrics"
+    
+    def __str__(self):
+        return self.name
+    
+    def save(self, *args, **kwargs):
+        # Ensure only one default rubric
+        if self.is_default:
+            EvaluationRubric.objects.filter(is_default=True).exclude(pk=self.pk).update(is_default=False)
+        super().save(*args, **kwargs)
+    
+    @classmethod
+    def get_default_rubric(cls):
+        """Returns the default rubric or creates one if none exists."""
+        default_rubric = cls.objects.filter(is_default=True).first()
+        if not default_rubric:
+            # Create a default rubric with standard criteria
+            default_criteria = {
+                "cleanliness": {"name": "Cleanliness", "max_marks": 5.0},
+                "hardware": {"name": "Hardware", "max_marks": 10.0},
+                "timeliness": {"name": "Timeliness", "max_marks": 5.0},
+                "student_preparation": {"name": "Student Preparation", "max_marks": 10.0},
+                "code_implementation": {"name": "Code Implementation", "max_marks": 15.0},
+                "commenting": {"name": "Commenting", "max_marks": 5.0},
+                "schematic": {"name": "Schematic", "max_marks": 10.0},
+                "course_participation": {"name": "Course Participation", "max_marks": 5.0}
+            }
+            
+            default_rubric = cls.objects.create(
+                name="Default Rubric",
+                description="Standard evaluation criteria for lab signoffs",
+                is_default=True,
+                criteria_data=default_criteria
+            )
+        return default_rubric
+    
+    def get_criteria(self):
+        """Returns the criteria as a dictionary."""
+        return self.criteria_data
+    
+    def get_total_max_marks(self):
+        """Get total maximum possible marks for this rubric."""
+        return sum(Decimal(str(criteria['max_marks'])) for criteria in self.criteria_data.values())
+
+
 class EvaluationSheet(models.Model):
+    """Individual evaluation sheet for a specific signoff, using a rubric."""
     STATUS_CHOICES = (
         ('ER', 'Exceeds Requirements'),
         ('MR', 'Meets Requirements'),
@@ -394,59 +452,44 @@ class EvaluationSheet(models.Model):
     }
     
     signoff = models.ForeignKey(Signoff, on_delete=models.CASCADE, related_name='evaluation_sheet')
+    rubric = models.ForeignKey(EvaluationRubric, on_delete=models.PROTECT, related_name='evaluation_sheets')
     
-    # Fields with their max marks
-    cleanliness = models.CharField(max_length=2, choices=STATUS_CHOICES)
-    cleanliness_max_marks = models.DecimalField(max_digits=5, decimal_places=2, default=5.0)
+    # Store evaluations as serialized JSON
+    evaluations = models.JSONField(default=dict)
     
-    hardware = models.CharField(max_length=2, choices=STATUS_CHOICES)
-    hardware_max_marks = models.DecimalField(max_digits=5, decimal_places=2, default=10.0)
+    def __str__(self):
+        return f"Evaluation for {self.signoff}"
     
-    timeliness = models.CharField(max_length=2, choices=STATUS_CHOICES)
-    timeliness_max_marks = models.DecimalField(max_digits=5, decimal_places=2, default=5.0)
-    
-    student_preparation = models.CharField(max_length=2, choices=STATUS_CHOICES)
-    student_preparation_max_marks = models.DecimalField(max_digits=5, decimal_places=2, default=10.0)
-    
-    code_implementation = models.CharField(max_length=2, choices=STATUS_CHOICES)
-    code_implementation_max_marks = models.DecimalField(max_digits=5, decimal_places=2, default=15.0)
-    
-    commenting = models.CharField(max_length=2, choices=STATUS_CHOICES)
-    commenting_max_marks = models.DecimalField(max_digits=5, decimal_places=2, default=5.0)
-    
-    schematic = models.CharField(max_length=2, choices=STATUS_CHOICES)
-    schematic_max_marks = models.DecimalField(max_digits=5, decimal_places=2, default=10.0)
-    
-    course_participation = models.CharField(max_length=2, choices=STATUS_CHOICES)
-    course_participation_max_marks = models.DecimalField(max_digits=5, decimal_places=2, default=5.0)
+    @classmethod
+    def create_from_rubric(cls, signoff, rubric=None):
+        """Creates a new evaluation sheet from a rubric."""
+        if not rubric:
+            rubric = EvaluationRubric.get_default_rubric()
+            
+        # Initialize evaluations with 'MR' (Meets Requirements) as default
+        evaluations = {key: 'MR' for key in rubric.criteria_data.keys()}
+        
+        return cls.objects.create(
+            signoff=signoff,
+            rubric=rubric,
+            evaluations=evaluations
+        )
     
     def get_total_max_marks(self):
         """Get total maximum possible marks for this evaluation sheet."""
-        return (
-            self.cleanliness_max_marks +
-            self.hardware_max_marks +
-            self.timeliness_max_marks +
-            self.student_preparation_max_marks +
-            self.code_implementation_max_marks +
-            self.commenting_max_marks +
-            self.schematic_max_marks +
-            self.course_participation_max_marks
-        )
+        return sum(Decimal(str(criteria['max_marks'])) for criteria in self.rubric.criteria_data.values())
     
     def get_earned_marks(self):
         """Calculate total marks earned based on status of each field."""
         total_earned = Decimal('0')
         
         # Calculate for each field
-        total_earned += self.cleanliness_max_marks * Decimal(str(self.STATUS_TO_SCORE.get(self.cleanliness, 0)))
-        total_earned += self.hardware_max_marks * Decimal(str(self.STATUS_TO_SCORE.get(self.hardware, 0)))
-        total_earned += self.timeliness_max_marks * Decimal(str(self.STATUS_TO_SCORE.get(self.timeliness, 0)))
-        total_earned += self.student_preparation_max_marks * Decimal(str(self.STATUS_TO_SCORE.get(self.student_preparation, 0)))
-        total_earned += self.code_implementation_max_marks * Decimal(str(self.STATUS_TO_SCORE.get(self.code_implementation, 0)))
-        total_earned += self.commenting_max_marks * Decimal(str(self.STATUS_TO_SCORE.get(self.commenting, 0)))
-        total_earned += self.schematic_max_marks * Decimal(str(self.STATUS_TO_SCORE.get(self.schematic, 0)))
-        total_earned += self.course_participation_max_marks * Decimal(str(self.STATUS_TO_SCORE.get(self.course_participation, 0)))
-        
+        for field, status in self.evaluations.items():
+            if field in self.rubric.criteria_data:
+                max_marks = Decimal(str(self.rubric.criteria_data[field]['max_marks']))
+                score_percentage = Decimal(str(self.STATUS_TO_SCORE.get(status, 0)))
+                total_earned += max_marks * score_percentage
+                
         return total_earned
     
     def get_percentage(self):
@@ -456,4 +499,17 @@ class EvaluationSheet(models.Model):
             return Decimal('0')
         
         return (self.get_earned_marks() / max_marks) * Decimal('100')
+        
+    def get_criterion_earned_marks(self, criterion):
+        """Calculate earned marks for a specific criterion."""
+        if criterion in self.rubric.criteria_data and criterion in self.evaluations:
+            max_marks = Decimal(str(self.rubric.criteria_data[criterion]['max_marks']))
+            status = self.evaluations.get(criterion, 'ND')
+            return max_marks * Decimal(str(self.STATUS_TO_SCORE.get(status, 0)))
+        return Decimal('0')
+        
+    def get_criterion_display(self, criterion):
+        """Get display name for a criterion's status."""
+        status = self.evaluations.get(criterion, 'ND')
+        return dict(self.STATUS_CHOICES).get(status, 'Not Demonstrated')
     
