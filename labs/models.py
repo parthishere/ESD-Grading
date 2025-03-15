@@ -181,6 +181,7 @@ class Part(models.Model):
     description = models.TextField(blank=True)
     order = models.PositiveIntegerField(default=0)
     is_required = models.BooleanField(default=True)
+    has_challenges = models.BooleanField(default=False, help_text="Check if this part has challenge tasks")
     
     class Meta:
         ordering = ['lab', 'order']
@@ -231,6 +232,12 @@ class Part(models.Model):
         if criteria:
             total_score += sum(Decimal(str(c.max_points)) for c in criteria)
         
+        # Add challenge points if this part has challenges
+        if self.has_challenges:
+            challenges = self.challenges.all()
+            if challenges:
+                total_score += sum(Decimal(str(c.max_points)) for c in challenges)
+        
         # Check if any signoffs for this part have evaluation sheets
         found_eval_sheet = False
         signoffs = self.signoffs.all()
@@ -271,7 +278,18 @@ class Part(models.Model):
                     evaluations=default_evaluations
                 )
             
-            return signoff.get_total_quality_score()
+            # Get the quality scores
+            quality_score = signoff.get_total_quality_score()
+            
+            # Add challenge scores if this part has challenges
+            challenge_score = Decimal('0')
+            if self.has_challenges:
+                challenge_scores = signoff.challenge_scores.all()
+                if challenge_scores:
+                    challenge_score = sum(Decimal(str(score.score)) for score in challenge_scores)
+            
+            return quality_score + challenge_score
+            
         except Signoff.DoesNotExist:
             return 0
             
@@ -315,6 +333,28 @@ class Part(models.Model):
         # Part's contribution is proportional to its max score relative to the total
         return (part_max_score / total_max_score) * self.lab.total_points
     
+class Challenge(models.Model):
+    """Model representing a challenge task for a lab part."""
+    part = models.ForeignKey(Part, on_delete=models.CASCADE, related_name='challenges')
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True)
+    max_points = models.PositiveIntegerField(default=10, help_text="Maximum points for this challenge")
+    difficulty = models.CharField(max_length=20, choices=[
+        ('easy', 'Easy'),
+        ('medium', 'Medium'),
+        ('hard', 'Hard'),
+        ('expert', 'Expert')
+    ], default='medium')
+    order = models.PositiveIntegerField(default=0)
+    
+    class Meta:
+        verbose_name_plural = "Challenges"
+        ordering = ['part', 'order']
+        
+    def __str__(self):
+        return f"{self.part} - Challenge: {self.name}"
+
+
 class QualityCriteria(models.Model):
     """Model representing grading criteria for a part."""
     part = models.ForeignKey(Part, on_delete=models.CASCADE, related_name='quality_criteria')
@@ -468,6 +508,40 @@ class Signoff(models.Model):
         
         # Add evaluation sheet score to quality score
         return quality_score + evaluation.get_earned_marks()
+        
+    def get_total_challenge_score(self):
+        """Get the total score from all challenges."""
+        if not self.part.has_challenges:
+            return Decimal('0')
+            
+        challenge_score = Decimal('0')
+        
+        # Get all challenges for this part
+        challenges = self.part.challenges.all()
+        
+        # If no challenges exist, return 0
+        if not challenges.exists():
+            return Decimal('0')
+            
+        # Get existing challenge scores
+        scores = self.challenge_scores.all()
+        
+        # Create a mapping of challenge ID to score for easy access
+        score_map = {score.challenge_id: Decimal(str(score.score)) for score in scores}
+        
+        # Sum up scores for all challenges - create default scores of 0 if missing
+        for challenge in challenges:
+            if challenge.id in score_map:
+                challenge_score += score_map[challenge.id]
+            else:
+                # Create a score of 0 for missing challenges
+                ChallengeScore.objects.create(
+                    signoff=self,
+                    challenge=challenge,
+                    score=0
+                )
+        
+        return challenge_score
     
     def get_max_quality_score(self):
         """Get the maximum possible score based on quality criteria."""
@@ -492,6 +566,18 @@ class Signoff(models.Model):
         
         # Add evaluation sheet max score
         return max_quality_score + evaluation.get_total_max_marks()
+    
+    def get_max_challenge_score(self):
+        """Get the maximum possible score from all challenges."""
+        if not self.part.has_challenges:
+            return Decimal('0')
+            
+        challenges = self.part.challenges.all()
+        if not challenges.exists():
+            return Decimal('0')
+            
+        # Sum up maximum points for all challenges
+        return sum(Decimal(str(c.max_points)) for c in challenges)
     
     def get_quality_percentage(self):
         """Get the quality score as a percentage."""
@@ -528,6 +614,27 @@ class Signoff(models.Model):
         else:
             return 4  # Outstanding
     
+class ChallengeScore(models.Model):
+    """Model representing a student's score on a challenge task."""
+    signoff = models.ForeignKey(Signoff, on_delete=models.CASCADE, related_name='challenge_scores')
+    challenge = models.ForeignKey(Challenge, on_delete=models.CASCADE, related_name='scores')
+    score = models.PositiveIntegerField(default=0, help_text="Earned points for this challenge")
+    comments = models.TextField(blank=True)
+    
+    class Meta:
+        unique_together = ('signoff', 'challenge')
+        
+    def __str__(self):
+        return f"{self.signoff} - {self.challenge.name} - {self.score} pts"
+    
+    @property
+    def percentage(self):
+        """Calculate percentage score."""
+        if self.challenge.max_points == 0:
+            return 0
+        return (self.score / self.challenge.max_points) * 100
+
+
 class QualityScore(models.Model):
     """Model representing a score for a specific quality criteria on a signoff."""
     signoff = models.ForeignKey(Signoff, on_delete=models.CASCADE, related_name='quality_scores')
@@ -616,7 +723,7 @@ class EvaluationSheet(models.Model):
     STATUS_CHOICES = (
         ('ER', 'Exceeds Requirements'),
         ('MR', 'Meets Requirements'),
-        ('MM', 'Minimally Meets'),
+        ('MM', 'Mostly Meets Requirements'),
         ('IR', 'Improvement Required'),
         ('ND', 'Not Demonstrated')
     )

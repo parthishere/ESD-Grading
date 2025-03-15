@@ -125,7 +125,10 @@
                                     <strong>{{ student_data.earned_points|floatformat:2 }}</strong> / {{ student_data.total_points|floatformat:2 }} points
                                     <span class="badge bg-primary ms-2" title="Using Default Grade Scale">{{ student_data.student.get_course_letter_grade }}</span>
                                 </p>
-                                <p class="text-muted small">
+                                <div class="mt-2">
+                                    <span class="badge bg-success p-2">{{ student_data.exceeds_requirements_count }} Exceeds Requirements</span>
+                                </div>
+                                <p class="text-muted small mt-2">
                                     <i class="fas fa-info-circle"></i> 
                                     Grade based on earned points across all labs
                                 </p>
@@ -263,7 +266,53 @@
                                             </tfoot>
                                         </table>
                                     </div>
-                                    {% elif part_data.status == 'not_started' %}
+                                    {% endif %}
+                                    
+                                    {% if part_data.part.has_challenges and part_data.challenge_scores %}
+                                    <h6 class="mt-3 mb-2">Challenge Scores</h6>
+                                    <div class="table-responsive">
+                                        <table class="table table-sm table-bordered quality-table">
+                                            <thead class="table-light">
+                                                <tr>
+                                                    <th>Challenge</th>
+                                                    <th>Difficulty</th>
+                                                    <th>Score</th>
+                                                    <th>Percentage</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for challenge in part_data.challenge_scores %}
+                                                <tr>
+                                                    <td>{{ challenge.challenge.name }}</td>
+                                                    <td><span class="badge {% if challenge.challenge.difficulty == 'easy' %}bg-success{% elif challenge.challenge.difficulty == 'medium' %}bg-info{% elif challenge.challenge.difficulty == 'hard' %}bg-warning{% else %}bg-danger{% endif %}">{{ challenge.challenge.difficulty|title }}</span></td>
+                                                    <td>
+                                                        {% if challenge.score %}
+                                                        {{ challenge.score.score }} / {{ challenge.challenge.max_points }}
+                                                        {% else %}
+                                                        Not attempted
+                                                        {% endif %}
+                                                    </td>
+                                                    <td>
+                                                        {% if challenge.score %}
+                                                        {{ challenge.percentage|floatformat:1 }}%
+                                                        {% else %}
+                                                        0%
+                                                        {% endif %}
+                                                    </td>
+                                                </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                            <tfoot class="table-light">
+                                                <tr>
+                                                    <th colspan="3">Total Challenge Score</th>
+                                                    <th>{{ part_data.challenge_earned_points|floatformat:2 }} / {{ part_data.challenge_max_points|floatformat:2 }}</th>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                    {% endif %}
+                                    
+                                    {% if part_data.status == 'not_started' %}
                                     
                                     {% endif %}
                                     

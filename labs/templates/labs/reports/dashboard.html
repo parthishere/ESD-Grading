@@ -87,6 +87,7 @@
                 </div>
                 <div class="card-body">
                     <div class="row">
+                        <!-- First row of stats -->
                         <div class="col-md-3 mb-3 mb-md-0">
                             <div class="card bg-primary text-white">
                                 <div class="card-body text-center">
@@ -111,7 +112,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-md-3 mb-3 mb-md-0">
                             <div class="card bg-warning">
                                 <div class="card-body text-center">
                                     <h3 id="completion-rate">--</h3>
@@ -120,6 +121,58 @@
                             </div>
                         </div>
                     </div>
+                    
+                    <!-- Second row of stats -->
+                    <div class="row mt-3">
+                        <div class="col-md-4 mb-3 mb-md-0">
+                            <div class="card bg-danger text-white">
+                                <div class="card-body text-center">
+                                    <h3 id="challenge-count">--</h3>
+                                    <p class="mb-0">Challenges Completed</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-3 mb-md-0">
+                            <div class="card bg-secondary text-white">
+                                <div class="card-body text-center">
+                                    <h3 id="challenge-completion">--</h3>
+                                    <p class="mb-0">Challenge Completion</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-3 mb-md-0">
+                            <div class="card bg-dark text-white">
+                                <div class="card-body text-center">
+                                    <h3 id="exceeds-requirements">--</h3>
+                                    <p class="mb-0">Exceeds Requirements</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Grade Distribution Chart -->
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h4 class="mb-0">Grade Distribution</h4>
+                </div>
+                <div class="card-body">
+                    <canvas id="gradeDistributionChart" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h4 class="mb-0">Challenge Completion</h4>
+                </div>
+                <div class="card-body">
+                    <canvas id="challengeCompletionChart" height="200"></canvas>
                 </div>
             </div>
         </div>
@@ -129,6 +182,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.7.1/dist/chart.min.js"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         // Print functionality
@@ -142,10 +196,180 @@
             .then(data => {
                 document.getElementById('signoff-count').textContent = data.total_signoffs;
                 document.getElementById('completion-rate').textContent = data.avg_completion + '%';
+                
+                // Set challenge stats
+                document.getElementById('challenge-count').textContent = data.completed_challenges + '/' + data.total_challenges;
+                document.getElementById('challenge-completion').textContent = data.challenge_completion + '%';
+                document.getElementById('exceeds-requirements').textContent = data.exceeds_requirements;
             })
             .catch(error => {
                 console.error('Error fetching stats:', error);
             });
+            
+        // Grade Distribution Chart
+        const grades = ['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D+', 'D', 'D-', 'F'];
+        const gradeData = [
+            {% for student in students %}
+                '{{ student.get_course_letter_grade }}',
+            {% endfor %}
+        ];
+        
+        // Count occurrences of each grade
+        const gradeCounts = {};
+        grades.forEach(grade => {
+            gradeCounts[grade] = 0;
+        });
+        
+        gradeData.forEach(grade => {
+            if (grade in gradeCounts) {
+                gradeCounts[grade]++;
+            }
+        });
+        
+        // Create the grade distribution chart
+        const gradeCtx = document.getElementById('gradeDistributionChart').getContext('2d');
+        const gradeChart = new Chart(gradeCtx, {
+            type: 'bar',
+            data: {
+                labels: grades,
+                datasets: [{
+                    label: 'Number of Students',
+                    data: grades.map(grade => gradeCounts[grade]),
+                    backgroundColor: [
+                        'rgba(75, 192, 192, 0.6)',  // A+ to B
+                        'rgba(75, 192, 192, 0.6)',
+                        'rgba(75, 192, 192, 0.6)',
+                        'rgba(54, 162, 235, 0.6)',  // B+ to C
+                        'rgba(54, 162, 235, 0.6)',
+                        'rgba(54, 162, 235, 0.6)',
+                        'rgba(255, 206, 86, 0.6)',  // C+ to D
+                        'rgba(255, 206, 86, 0.6)',
+                        'rgba(255, 206, 86, 0.6)',
+                        'rgba(255, 159, 64, 0.6)',  // D+ to F
+                        'rgba(255, 159, 64, 0.6)',
+                        'rgba(255, 159, 64, 0.6)',
+                        'rgba(255, 99, 132, 0.6)'
+                    ],
+                    borderColor: [
+                        'rgba(75, 192, 192, 1)',
+                        'rgba(75, 192, 192, 1)',
+                        'rgba(75, 192, 192, 1)',
+                        'rgba(54, 162, 235, 1)',
+                        'rgba(54, 162, 235, 1)',
+                        'rgba(54, 162, 235, 1)',
+                        'rgba(255, 206, 86, 1)',
+                        'rgba(255, 206, 86, 1)',
+                        'rgba(255, 206, 86, 1)',
+                        'rgba(255, 159, 64, 1)',
+                        'rgba(255, 159, 64, 1)',
+                        'rgba(255, 159, 64, 1)',
+                        'rgba(255, 99, 132, 1)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1
+                        }
+                    }
+                },
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Overall Grade Distribution'
+                    }
+                }
+            }
+        });
+        
+        // Create the challenge completion chart
+        const challengeCtx = document.getElementById('challengeCompletionChart').getContext('2d');
+        const challengeLabels = ['Not Attempted', '< 50%', '50-75%', '75-90%', '> 90%'];
+        const challengeData = [0, 0, 0, 0, 0]; // Populated based on challenge data below
+        
+        // Calculate challenge completion percentages for all students
+        {% for student in students %}
+            let totalChallengePoints = 0;
+            let earnedChallengePoints = 0;
+            {% for lab in labs %}
+                {% for part in lab.parts.all %}
+                    {% if part.has_challenges %}
+                        {% for challenge in part.challenges.all %}
+                            totalChallengePoints += {{ challenge.max_points }};
+                            // Try to find a score for this student
+                            {% for score in challenge.scores.all %}
+                                {% if score.signoff.student.id == student.id %}
+                                    earnedChallengePoints += {{ score.score }};
+                                {% endif %}
+                            {% endfor %}
+                        {% endfor %}
+                    {% endif %}
+                {% endfor %}
+            {% endfor %}
+            
+            if (totalChallengePoints > 0) {
+                const completionPercentage = (earnedChallengePoints / totalChallengePoints) * 100;
+                if (completionPercentage === 0) {
+                    challengeData[0]++; // Not attempted
+                } else if (completionPercentage < 50) {
+                    challengeData[1]++; // < 50%
+                } else if (completionPercentage < 75) {
+                    challengeData[2]++; // 50-75%
+                } else if (completionPercentage < 90) {
+                    challengeData[3]++; // 75-90%
+                } else {
+                    challengeData[4]++; // > 90%
+                }
+            }
+        {% endfor %}
+        
+        const challengeChart = new Chart(challengeCtx, {
+            type: 'bar',
+            data: {
+                labels: challengeLabels,
+                datasets: [{
+                    label: 'Number of Students',
+                    data: challengeData,
+                    backgroundColor: [
+                        'rgba(220, 53, 69, 0.6)', // Not attempted - Red
+                        'rgba(255, 159, 64, 0.6)', // < 50% - Orange 
+                        'rgba(255, 206, 86, 0.6)', // 50-75% - Yellow
+                        'rgba(54, 162, 235, 0.6)', // 75-90% - Blue
+                        'rgba(75, 192, 192, 0.6)'  // > 90% - Green
+                    ],
+                    borderColor: [
+                        'rgba(220, 53, 69, 1)',
+                        'rgba(255, 159, 64, 1)',
+                        'rgba(255, 206, 86, 1)',
+                        'rgba(54, 162, 235, 1)',
+                        'rgba(75, 192, 192, 1)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1
+                        }
+                    }
+                },
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Challenge Completion Distribution'
+                    }
+                }
+            }
+        });
     });
 </script>
 {% endblock %}

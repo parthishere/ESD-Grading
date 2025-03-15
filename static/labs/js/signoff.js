@@ -352,8 +352,128 @@ document.addEventListener("DOMContentLoaded", function () {
       criteriaContainer.appendChild(row);
     });
     
+    // Render challenges if the part has them
+    if (currentCriteria && currentCriteria.has_challenges && currentCriteria.challenges && currentCriteria.challenges.length > 0) {
+      renderChallenges(currentCriteria.challenges);
+    }
+    
     // Add the evaluation sheet criteria
     renderEvaluationSheet();
+  }
+  
+  /**
+   * Render challenges as numeric inputs
+   * @param {Array} challenges - Array of challenge objects
+   */
+  function renderChallenges(challenges) {
+    // Add a separator row
+    const separatorRow = document.createElement("tr");
+    const separatorCell = document.createElement("td");
+    separatorCell.setAttribute("colspan", "6");
+    separatorCell.className = "pt-4";
+    separatorRow.appendChild(separatorCell);
+    criteriaContainer.appendChild(separatorRow);
+    
+    // Add a header row for challenges
+    const headerRow = document.createElement("tr");
+    const headerCell = document.createElement("th");
+    headerCell.setAttribute("colspan", "6");
+    headerCell.classList.add("bg-light");
+    headerCell.innerHTML = "<h5>Challenges</h5>";
+    headerRow.appendChild(headerCell);
+    criteriaContainer.appendChild(headerRow);
+    
+    // Add column headers
+    const columnHeaderRow = document.createElement("tr");
+    
+    const challengeHeaderCell = document.createElement("th");
+    challengeHeaderCell.textContent = "Challenge";
+    columnHeaderRow.appendChild(challengeHeaderCell);
+    
+    const difficultyHeaderCell = document.createElement("th");
+    difficultyHeaderCell.textContent = "Difficulty";
+    difficultyHeaderCell.className = "text-center";
+    columnHeaderRow.appendChild(difficultyHeaderCell);
+    
+    const scoreHeaderCell = document.createElement("th");
+    scoreHeaderCell.textContent = "Points";
+    scoreHeaderCell.className = "text-center";
+    scoreHeaderCell.setAttribute("colspan", "4");
+    columnHeaderRow.appendChild(scoreHeaderCell);
+    
+    criteriaContainer.appendChild(columnHeaderRow);
+    
+    // Draw a row for each challenge
+    challenges.forEach((challenge) => {
+      const row = document.createElement("tr");
+      
+      // Create cell for challenge name
+      const nameCell = document.createElement("td");
+      nameCell.innerHTML = `<strong>${challenge.name}</strong><br><small>${challenge.description || ''}</small>`;
+      row.appendChild(nameCell);
+      
+      // Create cell for difficulty
+      const difficultyCell = document.createElement("td");
+      difficultyCell.className = "text-center";
+      
+      // Create badge for difficulty
+      const badge = document.createElement("span");
+      badge.className = `badge ${getDifficultyClass(challenge.difficulty)}`;
+      badge.textContent = challenge.difficulty.charAt(0).toUpperCase() + challenge.difficulty.slice(1);
+      difficultyCell.appendChild(badge);
+      row.appendChild(difficultyCell);
+      
+      // Create cell for score input
+      const scoreCell = document.createElement("td");
+      scoreCell.className = "text-center";
+      scoreCell.setAttribute("colspan", "4");
+      
+      // Create score input
+      const scoreDiv = document.createElement("div");
+      scoreDiv.className = "d-flex align-items-center justify-content-center";
+      
+      const scoreInput = document.createElement("input");
+      scoreInput.type = "number";
+      scoreInput.name = `challenge_${challenge.id}`;
+      scoreInput.value = 0;
+      scoreInput.min = 0;
+      scoreInput.max = challenge.max_points;
+      scoreInput.step = 1;
+      scoreInput.className = "form-control form-control-sm";
+      scoreInput.style.width = "70px";
+      
+      const maxPointsSpan = document.createElement("span");
+      maxPointsSpan.className = "ms-2";
+      maxPointsSpan.textContent = `/ ${challenge.max_points}`;
+      
+      scoreDiv.appendChild(scoreInput);
+      scoreDiv.appendChild(maxPointsSpan);
+      
+      scoreCell.appendChild(scoreDiv);
+      row.appendChild(scoreCell);
+      
+      criteriaContainer.appendChild(row);
+    });
+  }
+  
+  /**
+   * Get Bootstrap class for challenge difficulty
+   * @param {string} difficulty - Difficulty level
+   * @returns {string} - Bootstrap class
+   */
+  function getDifficultyClass(difficulty) {
+    switch (difficulty) {
+      case 'easy':
+        return 'bg-success';
+      case 'medium':
+        return 'bg-info';
+      case 'hard':
+        return 'bg-warning';
+      case 'expert':
+        return 'bg-danger';
+      default:
+        return 'bg-secondary';
+    }
   }
   
   /**
@@ -388,7 +508,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const statusOptions = [
       { value: "ER", label: "Exceeds Requirements" },
       { value: "MR", label: "Meets Requirements" },
-      { value: "MM", label: "Minimally Meets" },
+      { value: "MM", label: "Mostly Meets Requirements" },
       { value: "IR", label: "Improvement Required" },
       { value: "ND", label: "Not Demonstrated" },
     ];
@@ -528,6 +648,18 @@ document.addEventListener("DOMContentLoaded", function () {
               );
               if (radio) {
                 radio.checked = true;
+              }
+            });
+          }
+          
+          // Set challenge scores if available
+          if (data.has_challenges && data.challenge_scores && data.challenge_scores.length > 0) {
+            data.challenge_scores.forEach((score) => {
+              const input = document.querySelector(
+                `input[name="challenge_${score.challenge_id}"]`
+              );
+              if (input) {
+                input.value = score.score;
               }
             });
           }
@@ -673,7 +805,8 @@ document.addEventListener("DOMContentLoaded", function () {
       comments: document.getElementById("comments").value,
       overall_score: document.querySelector('input[name="overall_score"]:checked').value,
       criteria_scores: {},
-      rubric_evaluations: {}
+      rubric_evaluations: {},
+      challenge_scores: {}
     };
 
     // Get quality criteria scores
@@ -688,6 +821,12 @@ document.addEventListener("DOMContentLoaded", function () {
         const criterionKey = select.name.replace('eval_', '');
         formData.rubric_evaluations[criterionKey] = select.value;
       }
+    });
+    
+    // Get challenge scores
+    document.querySelectorAll('input[name^="challenge_"]').forEach(input => {
+      const challengeId = input.name.replace('challenge_', '');
+      formData.challenge_scores[challengeId] = input.value;
     });
 
     // Log form data for debugging
@@ -782,6 +921,11 @@ document.addEventListener("DOMContentLoaded", function () {
     // Reset all criteria to "Meets Requirements"
     criteriaContainer.querySelectorAll('input[value="2"]').forEach((radio) => {
       radio.checked = true;
+    });
+    
+    // Reset challenge scores to 0
+    criteriaContainer.querySelectorAll('input[name^="challenge_"]').forEach((input) => {
+      input.value = 0;
     });
     
     // Reset evaluation sheet fields

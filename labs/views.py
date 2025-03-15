@@ -301,9 +301,25 @@ def get_criteria(request):
                 'max_marks': criterion['max_marks']
             })
         
+        # Get challenges for this part if it has challenges
+        challenges_data = []
+        if part.has_challenges:
+            challenges = part.challenges.all().order_by('order')
+            for challenge in challenges:
+                challenges_data.append({
+                    'id': challenge.id,
+                    'name': challenge.name,
+                    'description': challenge.description,
+                    'max_points': challenge.max_points,
+                    'difficulty': challenge.difficulty,
+                    'order': challenge.order
+                })
+        
         response_data = {
             'criteria': criteria_data,
-            'rubric_criteria': rubric_criteria
+            'rubric_criteria': rubric_criteria,
+            'has_challenges': part.has_challenges,
+            'challenges': challenges_data
         }
         
         # Log the response data for debugging
@@ -334,11 +350,13 @@ def quick_signoff_submit(request):
         overall_score = data.get('overall_score', 2)
         criteria_scores = data.get('criteria_scores', {})
         rubric_evaluations = data.get('rubric_evaluations', {})
+        challenge_scores = data.get('challenge_scores', {})
         
         # Log the parsed data for debugging
         print(f"Parsed data: student_id={student_id}, part_id={part_id}")
         print(f"criteria_scores: {criteria_scores}")
         print(f"rubric_evaluations: {rubric_evaluations}")
+        print(f"challenge_scores: {challenge_scores}")
         
         # Validate required fields
         if not student_id or not part_id:
@@ -421,6 +439,31 @@ def quick_signoff_submit(request):
             eval_sheet.rubric = rubric
             eval_sheet.evaluations = rubric_evaluations
             eval_sheet.save()
+            
+        # If part has challenges, save challenge scores
+        if part.has_challenges and challenge_scores:
+            for challenge_id, score in challenge_scores.items():
+                try:
+                    challenge = Challenge.objects.get(pk=challenge_id)
+                    # Convert score to integer if it's a string
+                    if isinstance(score, str):
+                        score = int(score)
+                    # Make sure score doesn't exceed max points
+                    score = min(score, challenge.max_points)
+                    
+                    challenge_score, _ = ChallengeScore.objects.update_or_create(
+                        signoff=signoff,
+                        challenge=challenge,
+                        defaults={'score': score}
+                    )
+                except Challenge.DoesNotExist:
+                    print(f"Challenge with ID {challenge_id} not found")
+                    # Skip invalid challenge IDs
+                    continue
+                except Exception as e:
+                    print(f"Error saving challenge score for challenge {challenge_id}: {str(e)}")
+                    # Skip errors and continue
+                    continue
         
         return JsonResponse({
             'success': True,
@@ -527,6 +570,33 @@ def get_signoff_details(request):
             except:
                 pass
                 
+            # Get challenge scores if part has challenges
+            challenge_scores = []
+            has_challenges = part.has_challenges
+            
+            if has_challenges:
+                challenges = part.challenges.all().order_by('order')
+                for challenge in challenges:
+                    try:
+                        score = ChallengeScore.objects.get(signoff=signoff, challenge=challenge)
+                        challenge_scores.append({
+                            'challenge_id': challenge.id,
+                            'name': challenge.name,
+                            'score': score.score,
+                            'max_points': challenge.max_points,
+                            'difficulty': challenge.difficulty,
+                            'comments': score.comments
+                        })
+                    except ChallengeScore.DoesNotExist:
+                        challenge_scores.append({
+                            'challenge_id': challenge.id,
+                            'name': challenge.name,
+                            'score': 0,
+                            'max_points': challenge.max_points,
+                            'difficulty': challenge.difficulty,
+                            'comments': ''
+                        })
+            
             # Get signoff history
             history = []
             # In a real implementation, you would fetch history records here
@@ -540,6 +610,8 @@ def get_signoff_details(request):
                 'quality_scores': quality_scores,
                 'has_evaluation_sheet': has_evaluation_sheet,
                 'evaluation_sheet': evaluation_sheet_data,
+                'has_challenges': has_challenges,
+                'challenge_scores': challenge_scores,
                 'history': history
             })
         except Signoff.DoesNotExist:
@@ -880,7 +952,8 @@ def student_grade_report(request, student_id=None):
             'student': student,
             'labs': [],
             'earned_points': Decimal('0'),
-            'total_points': Decimal('0')
+            'total_points': Decimal('0'),
+            'exceeds_requirements_count': 0  # Add counter for ER statuses
         }
         
         # Process each lab
@@ -913,7 +986,10 @@ def student_grade_report(request, student_id=None):
                     'quality_scores': [],
                     'evaluation_sheet': None,
                     'quality_earned_points': Decimal('0'),
-                    'quality_max_points': Decimal('0')
+                    'quality_max_points': Decimal('0'),
+                    'challenge_scores': [],
+                    'challenge_earned_points': Decimal('0'),
+                    'challenge_max_points': Decimal('0')
                 }
                 
                 # Get signoff if it exists
@@ -949,6 +1025,30 @@ def student_grade_report(request, student_id=None):
                             
                             part_data['quality_max_points'] += Decimal(str(max_weighted))
                         
+                        # Get challenge scores if applicable
+                        if part.has_challenges:
+                            challenges = part.challenges.all().order_by('order')
+                            
+                            for challenge in challenges:
+                                try:
+                                    score = ChallengeScore.objects.get(signoff=signoff, challenge=challenge)
+                                    part_data['challenge_scores'].append({
+                                        'challenge': challenge,
+                                        'score': score,
+                                        'percentage': score.percentage
+                                    })
+                                    
+                                    part_data['challenge_earned_points'] += Decimal(str(score.score))
+                                except ChallengeScore.DoesNotExist:
+                                    part_data['challenge_scores'].append({
+                                        'challenge': challenge,
+                                        'score': None,
+                                        'percentage': 0
+                                    })
+                                    
+                                # Add max points for this challenge
+                                part_data['challenge_max_points'] += Decimal(str(challenge.max_points))
+                        
                         # Get evaluation sheet if it exists
                         try:
                             eval_sheet = EvaluationSheet.objects.get(signoff=signoff)
@@ -960,6 +1060,10 @@ def student_grade_report(request, student_id=None):
                                 # Add data for each criterion in the rubric
                                 for key, criterion in eval_sheet.rubric.criteria_data.items():
                                     status = eval_sheet.evaluations.get(key, 'ND')
+                                    # Count "Exceeds Requirements" statuses
+                                    if status == 'ER':
+                                        student_data['exceeds_requirements_count'] += 1
+                                    
                                     max_marks = Decimal(str(criterion['max_marks']))
                                     earned = max_marks * Decimal(str(EvaluationSheet.STATUS_TO_SCORE.get(status, 0)))
                                     
@@ -1016,10 +1120,28 @@ def quick_stats(request):
         avg_completion = round(completion_sum / students.count(), 1)
     else:
         avg_completion = 0
+        
+    # Count challenges and completed challenges
+    total_challenges = Challenge.objects.count()
+    completed_challenges = ChallengeScore.objects.filter(score__gt=0).count()
+    challenge_completion = 0
+    if total_challenges > 0:
+        challenge_completion = round((completed_challenges / total_challenges) * 100, 1)
+    
+    # Count "exceeds requirements" evaluations
+    exceeds_requirements = 0
+    for sheet in EvaluationSheet.objects.all():
+        for status in sheet.evaluations.values():
+            if status == 'ER':
+                exceeds_requirements += 1
     
     return JsonResponse({
         'total_signoffs': total_signoffs,
-        'avg_completion': avg_completion
+        'avg_completion': avg_completion,
+        'total_challenges': total_challenges,
+        'completed_challenges': completed_challenges,
+        'challenge_completion': challenge_completion,
+        'exceeds_requirements': exceeds_requirements
     })
 
 @login_required
@@ -1291,6 +1413,7 @@ def export_student_grade_csv(request, student_id=None):
     # Build a comprehensive list of all criteria across all parts
     all_quality_criteria = []
     all_rubric_criteria = set()
+    all_challenges = []
     
     # Organize labs and parts data
     lab_parts = {}
@@ -1305,6 +1428,12 @@ def export_student_grade_csv(request, student_id=None):
             for criteria in quality_criteria:
                 all_quality_criteria.append((lab.name, part.name, criteria.name, criteria.id))
             
+            # Get challenges if the part has them
+            if part.has_challenges:
+                challenges = part.challenges.all()
+                for challenge in challenges:
+                    all_challenges.append((lab.name, part.name, challenge.name, challenge.id))
+            
             # Get rubric criteria
             signoffs = Signoff.objects.filter(part=part)
             for signoff in signoffs:
@@ -1317,6 +1446,7 @@ def export_student_grade_csv(request, student_id=None):
     # Sort criteria lists
     all_quality_criteria.sort()
     all_rubric_criteria = sorted(all_rubric_criteria)
+    all_challenges.sort()
     
     # Create header row
     header = ['Student ID', 'Student Name', 'Email', 'Batch']
@@ -1335,6 +1465,10 @@ def export_student_grade_csv(request, student_id=None):
     # Add quality criteria columns
     for lab_name, part_name, criteria_name, _ in all_quality_criteria:
         header.append(f"{lab_name} - {part_name} - Quality: {criteria_name}")
+    
+    # Add challenge columns
+    for lab_name, part_name, challenge_name, _ in all_challenges:
+        header.append(f"{lab_name} - {part_name} - Challenge: {challenge_name}")
     
     # Add rubric criteria columns
     for lab_name, part_name, criteria_name, _ in all_rubric_criteria:
@@ -1361,6 +1495,7 @@ def export_student_grade_csv(request, student_id=None):
         lab_data = {}
         part_status = {}
         quality_scores = {}
+        challenge_scores = {}
         rubric_scores = {}
         
         # Process each lab and its parts
@@ -1394,6 +1529,19 @@ def export_student_grade_csv(request, student_id=None):
                                 }
                             except QualityScore.DoesNotExist:
                                 pass
+                        
+                        # Collect challenge scores if applicable
+                        if part.has_challenges:
+                            challenges = part.challenges.all()
+                            for challenge in challenges:
+                                try:
+                                    score = ChallengeScore.objects.get(signoff=signoff, challenge=challenge)
+                                    challenge_scores[(lab.id, part.id, challenge.id)] = {
+                                        'score': score.score,
+                                        'max_points': challenge.max_points
+                                    }
+                                except ChallengeScore.DoesNotExist:
+                                    pass
                         
                         # Collect rubric scores
                         try:
@@ -1448,6 +1596,25 @@ def export_student_grade_csv(request, student_id=None):
             else:
                 row.append("N/A")
         
+        # Add challenge scores
+        for lab_name, part_name, challenge_name, challenge_id in all_challenges:
+            # Find the lab and part IDs
+            lab_id = next((lab.id for lab in labs if lab.name == lab_name), None)
+            if lab_id:
+                parts = lab_parts[lab_id]
+                part_id = next((part.id for part in parts if part.name == part_name), None)
+                
+                if part_id:
+                    score_data = challenge_scores.get((lab_id, part_id, challenge_id), None)
+                    if score_data:
+                        row.append(f"{score_data['score']}/{score_data['max_points']}")
+                    else:
+                        row.append("N/A")
+                else:
+                    row.append("N/A")
+            else:
+                row.append("N/A")
+        
         # Add rubric criteria scores
         for lab_name, part_name, criteria_name, criterion_key in all_rubric_criteria:
             # Find the lab and part IDs
@@ -1469,7 +1636,7 @@ def export_student_grade_csv(request, student_id=None):
         
         # Add overall scores calculated from student model
         overall_grade = student.get_overall_grade()
-        row.append(f"{earned_points}/{total_points}")  # Raw points
+        row.append(f"{student_data['earned_points']}/{student_data['total_points']}")  # Raw points
         row.append(f"{overall_grade:.2f}%")  # Percentage
         row.append(student.get_course_letter_grade())  # Letter grade
         
