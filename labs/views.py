@@ -49,6 +49,7 @@ def ta_required(function):
 
 # Home view
 @login_required
+@ta_required
 def home_view(request):
     """Home view that shows quick signoff UI."""
     # Get all labs
@@ -80,18 +81,21 @@ def home_view(request):
     return render(request, 'labs/home.html', context)
 
 @login_required
+@ta_required
 def lab_list(request):
     """List all labs."""
     labs = Lab.objects.all()
     return render(request, 'labs/lablist.html', {'labs': labs})
 
 @login_required
+@ta_required
 def lab_detail(request, lab_id):
     """View details for a lab."""
     lab = get_object_or_404(Lab, pk=lab_id)
     return render(request, 'labs/lab_detail.html', {'lab': lab})
 
 @login_required
+@ta_required
 def part_detail(request, part_id):
     """View details for a lab part."""
     part = get_object_or_404(Part, pk=part_id)
@@ -117,6 +121,7 @@ def part_detail(request, part_id):
     return render(request, 'labs/part_detail.html', context)
 
 @login_required
+@ta_required
 def student_list(request):
     """List all students with search and filter functionality."""
     # Get search and filter parameters
@@ -160,11 +165,104 @@ def student_list(request):
     return render(request, 'labs/student_list.html', context)
 
 @login_required
+@instructor_required
 def student_upload(request):
     """Upload student data from Excel."""
-    return render(request, 'labs/student_upload.html')
+    if request.method == 'POST':
+        form = StudentUploadForm(request.POST, request.FILES)
+        if form.is_valid():
+            try:
+                # Process Excel file
+                excel_file = request.FILES['excel_file']
+                
+                # Check file extension
+                if not excel_file.name.endswith(('.xlsx', '.xls')):
+                    messages.error(request, 'Uploaded file is not a valid Excel file. Please upload .xlsx or .xls file.')
+                    return redirect('labs:student_upload')
+                
+                # Read the excel file
+                import pandas as pd
+                import numpy as np
+                import datetime
+                
+                df = pd.read_excel(excel_file)
+                
+                # Check required columns
+                required_columns = ['student_id', 'name', 'email', 'batch']
+                missing_columns = [col for col in required_columns if col not in df.columns]
+                
+                if missing_columns:
+                    messages.error(request, f"Missing required columns: {', '.join(missing_columns)}")
+                    return redirect('labs:student_upload')
+                
+                # Process each row
+                created_count = 0
+                updated_count = 0
+                error_count = 0
+                
+                for _, row in df.iterrows():
+                    try:
+                        # Clean the data
+                        student_id = str(row['student_id']).strip()
+                        name = str(row['name']).strip()
+                        email = str(row['email']).strip()
+                        
+                        # Handle batch date - could be string, datetime, or NaT
+                        if pd.isna(row['batch']):
+                            batch = datetime.date.today()
+                        elif isinstance(row['batch'], str):
+                            try:
+                                batch = datetime.datetime.strptime(row['batch'], '%Y-%m-%d').date()
+                            except ValueError:
+                                batch = datetime.date.today()
+                        elif isinstance(row['batch'], datetime.datetime):
+                            batch = row['batch'].date()
+                        else:
+                            batch = datetime.date.today()
+                        
+                        # Skip empty rows
+                        if not student_id or not name:
+                            continue
+                        
+                        # Create or update student
+                        student, created = Student.objects.update_or_create(
+                            student_id=student_id,
+                            defaults={
+                                'name': name,
+                                'email': email,
+                                'batch': batch,
+                                'active': True
+                            }
+                        )
+                        
+                        if created:
+                            created_count += 1
+                        else:
+                            updated_count += 1
+                            
+                    except Exception as e:
+                        error_count += 1
+                        print(f"Error processing row: {e}")
+                        continue
+                
+                # Show success message
+                message = f"Successfully processed {created_count + updated_count} students "
+                message += f"({created_count} created, {updated_count} updated)"
+                if error_count > 0:
+                    message += f". {error_count} errors encountered."
+                
+                messages.success(request, message)
+                return redirect('labs:student_list')
+                
+            except Exception as e:
+                messages.error(request, f"Error processing Excel file: {str(e)}")
+    else:
+        form = StudentUploadForm()
+    
+    return render(request, 'labs/student_upload.html', {'form': form})
 
 @login_required
+@ta_required
 def batch_toggle_students(request):
     """Toggle active status for multiple students."""
     if request.method == 'POST':
@@ -232,6 +330,7 @@ def batch_toggle_students(request):
     return render(request, 'labs/batch_toggle_students.html', context)
 
 @login_required
+@ta_required
 def student_toggle_active(request, student_id):
     """Toggle active status for a student."""
     student = get_object_or_404(Student, pk=student_id)
@@ -240,6 +339,7 @@ def student_toggle_active(request, student_id):
     return redirect('labs:student_list')
 
 @login_required
+@ta_required
 def student_detail(request, student_id):
     """View details for a student."""
     student = get_object_or_404(Student, pk=student_id)
@@ -312,23 +412,117 @@ def student_detail(request, student_id):
     return render(request, 'labs/student_detail.html', context)
 
 @login_required
+@instructor_required
 def user_list(request):
     """List all users."""
-    users = User.objects.all()
+    users = User.objects.all().order_by('username')
+    
+    # Attach role information to each user
+    for user in users:
+        try:
+            user.role_info = user.role
+        except UserRole.DoesNotExist:
+            user.role_info = None
+    
     return render(request, 'labs/user_list.html', {'users': users})
 
 @login_required
+@instructor_required
 def user_create(request):
     """Create a new user."""
-    return render(request, 'labs/user_form.html')
+    if request.method == 'POST':
+        form = UserRoleForm(request.POST)
+        if form.is_valid():
+            # Extract form data
+            username = form.cleaned_data['username']
+            email = form.cleaned_data['email']
+            first_name = form.cleaned_data['first_name']
+            last_name = form.cleaned_data['last_name']
+            password = form.cleaned_data['password1']
+            role = form.cleaned_data['role']
+            
+            # Check if the username already exists
+            if User.objects.filter(username=username).exists():
+                messages.error(request, f'Username "{username}" already exists.')
+                return render(request, 'labs/user_form.html', {'form': form, 'title': 'Create User'})
+            
+            # Create the user
+            user = User.objects.create_user(
+                username=username,
+                email=email,
+                password=password if password else None,
+                first_name=first_name,
+                last_name=last_name
+            )
+            
+            # Create the user role
+            UserRole.objects.create(user=user, role=role)
+            
+            messages.success(request, f'User "{username}" created successfully.')
+            return redirect('labs:user_list')
+    else:
+        form = UserRoleForm()
+    
+    return render(request, 'labs/user_form.html', {'form': form, 'title': 'Create User'})
 
 @login_required
+@instructor_required
 def user_edit(request, user_id):
     """Edit a user."""
     user = get_object_or_404(User, pk=user_id)
-    return render(request, 'labs/user_form.html', {'user': user})
+    
+    # Get or create UserRole for this user
+    user_role, created = UserRole.objects.get_or_create(
+        user=user,
+        defaults={'role': 'student'}
+    )
+    
+    if request.method == 'POST':
+        form = UserRoleForm(request.POST, instance=user_role)
+        if form.is_valid():
+            # Extract form data
+            username = form.cleaned_data['username']
+            email = form.cleaned_data['email']
+            first_name = form.cleaned_data['first_name']
+            last_name = form.cleaned_data['last_name']
+            password = form.cleaned_data['password1']
+            
+            # Check if the username already exists and is not this user's username
+            if User.objects.filter(username=username).exclude(pk=user_id).exists():
+                messages.error(request, f'Username "{username}" already exists.')
+                return render(request, 'labs/user_form.html', {'form': form, 'title': 'Edit User'})
+            
+            # Update the user
+            user.username = username
+            user.email = email
+            user.first_name = first_name
+            user.last_name = last_name
+            
+            # Update the password if provided
+            if password:
+                user.set_password(password)
+                
+            user.save()
+            
+            # Save the role
+            form.save()
+            
+            messages.success(request, f'User "{username}" updated successfully.')
+            return redirect('labs:user_list')
+    else:
+        # Initialize form with existing data
+        initial_data = {
+            'username': user.username,
+            'email': user.email,
+            'first_name': user.first_name,
+            'last_name': user.last_name,
+        }
+        form = UserRoleForm(instance=user_role, initial=initial_data)
+    
+    return render(request, 'labs/user_form.html', {'form': form, 'title': 'Edit User'})
 
 @login_required
+@ta_required
 def signoff_list(request):
     """List all signoffs with optional filters."""
     # Get filter parameters
@@ -368,18 +562,21 @@ def signoff_list(request):
     return render(request, 'labs/signoff_list.html', context)
 
 @login_required
+@ta_required
 def signoff_detail(request, signoff_id):
     """View details for a signoff."""
     signoff = get_object_or_404(Signoff, pk=signoff_id)
     return render(request, 'labs/signoff_detail.html', {'signoff': signoff})
 
 @login_required
+@ta_required
 def signoff_edit(request, signoff_id):
     """Edit a signoff."""
     signoff = get_object_or_404(Signoff, pk=signoff_id)
     return render(request, 'labs/signoff_edit.html', {'signoff': signoff})
 
 @login_required
+@ta_required
 def student_name_search(request):
     """Search for students by name or ID."""
     query = request.GET.get('query', '').strip()
@@ -409,6 +606,7 @@ def student_name_search(request):
     })
 
 @login_required
+@ta_required
 def get_existing_signoff(request):
     """Get existing signoff data for a student and lab."""
     student_id = request.GET.get('student_id')
@@ -451,6 +649,7 @@ def get_existing_signoff(request):
         return JsonResponse([], safe=False)
 
 @login_required
+@ta_required
 def get_parts(request):
     """Get parts for a lab."""
     lab_id = request.GET.get('lab_id')
@@ -478,6 +677,7 @@ def get_parts(request):
         return JsonResponse([], safe=False)
 
 @login_required
+@ta_required
 def get_criteria(request):
     """Get criteria for a part."""
     part_id = request.GET.get('part_id')
@@ -550,6 +750,7 @@ def get_criteria(request):
         return JsonResponse({'criteria': [], 'error': str(e)}, status=500)
 
 @login_required
+@ta_required
 def quick_signoff_submit(request):
     """Submit a quick signoff."""
     if request.method != 'POST':
@@ -707,6 +908,7 @@ def quick_signoff_submit(request):
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 @login_required
+@ta_required
 def get_signoff_details(request):
     """Get details for a signoff."""
     student_id = request.GET.get('student_id')
@@ -846,6 +1048,7 @@ def get_signoff_details(request):
         return JsonResponse({'found': False, 'error': 'Student or part not found'}, status=404)
 
 @login_required
+@ta_required
 def reports(request):
     """View reports dashboard."""
     report_types = [
@@ -883,6 +1086,7 @@ def reports(request):
     return render(request, 'labs/reports/dashboard.html', context)
 
 @login_required
+@ta_required
 def lab_report(request, lab_id=None):
     """View report for a lab showing student progress for each part."""
     # Check for CSV export format
@@ -1007,6 +1211,7 @@ def lab_report(request, lab_id=None):
     })
 
 @login_required
+@ta_required
 def student_progress_report(request):
     """View progress report for all students across all labs."""
     # Get all active students
@@ -1084,6 +1289,7 @@ def student_progress_report(request):
     })
 
 @login_required
+@ta_required
 def ta_report(request):
     """View TA report."""
     # Get all instructors (users who can sign off)
@@ -1175,6 +1381,7 @@ def ta_report(request):
     })
 
 @login_required
+@ta_required
 def student_grade_report(request, student_id=None):
     """View detailed grade report for a student or all students."""
     # Check for CSV export format
@@ -1356,6 +1563,7 @@ def student_grade_report(request, student_id=None):
     })
 
 @login_required
+@ta_required
 def quick_stats(request):
     """Get quick stats data."""
     # Count total approved signoffs
@@ -1467,6 +1675,7 @@ def quick_stats(request):
     })
 
 @login_required
+@ta_required
 def export_lab_csv(request, lab_id):
     """Export all student data for a lab as CSV with linearized criteria columns."""
     lab = get_object_or_404(Lab, pk=lab_id)
@@ -1661,6 +1870,7 @@ def export_lab_csv(request, lab_id):
 
 
 @login_required
+@ta_required
 def export_part_csv(request, part_id):
     """Export all student data for a specific part as CSV with linearized criteria columns."""
     part = get_object_or_404(Part, pk=part_id)
@@ -1827,6 +2037,7 @@ def export_part_csv(request, part_id):
 
 
 @login_required
+@ta_required
 def export_student_grade_csv(request, student_id=None):
     """Export comprehensive student grade data as CSV with linearized columns."""
     # Get all active students
@@ -2164,6 +2375,7 @@ def export_student_grade_csv(request, student_id=None):
     return response
 
 @login_required
+@ta_required
 def export_all_data_csv(request):
     """Export all student data for all labs and all parts as a comprehensive CSV report."""
     # Only get active students
