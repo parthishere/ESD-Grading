@@ -23,6 +23,6 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('', include('labs.urls', namespace='labs')),
     
-    # path('api/auth/', include('dj_rest_auth.urls')),
+    path('accounts/', include('allauth.urls')),
     # path('accounts/', include('allauth.urls')),
 ]
