@@ -1,0 +1,119 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Assign Rubric | {{ part.name }} | ESD Lab Grading{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-container {
+        max-width: 800px;
+        margin: 0 auto;
+    }
+    .rubric-card {
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    .rubric-card:hover {
+        border-color: #007bff;
+        background-color: #f8f9fa;
+    }
+    .rubric-card.selected {
+        border-color: #28a745;
+        background-color: #d4edda;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container form-container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h2">Assign Evaluation Rubric</h1>
+        <a href="{% url 'labs:part_detail' part_id=part.id %}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left me-1"></i> Back to Part
+        </a>
+    </div>
+    
+    <div class="card mb-4">
+        <div class="card-header">
+            <div><strong>Lab:</strong> {{ part.lab.name }}</div>
+            <div><strong>Part:</strong> {{ part.name }}</div>
+        </div>
+    </div>
+    
+    <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="rubric_id" id="selected_rubric_id">
+        
+        <div class="mb-4">
+            <h3 class="h5">Select a Rubric:</h3>
+            
+            <div class="row row-cols-1 row-cols-md-2 g-4">
+                {% for rubric in rubrics %}
+                <div class="col">
+                    <div class="card rubric-card" data-rubric-id="{{ rubric.id }}">
+                        <div class="card-body">
+                            <h5 class="card-title">{{ rubric.name }}
+                                {% if rubric.is_default %}
+                                <span class="badge bg-success">Default</span>
+                                {% endif %}
+                            </h5>
+                            <p class="card-text">{{ rubric.description|truncatechars:100 }}</p>
+                            <div class="card-text">
+                                <small class="text-muted">
+                                    {{ rubric.criteria_data|length }} criteria, 
+                                    {{ rubric.get_total_max_marks }} max marks total
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="col-12">
+                    <div class="alert alert-warning">
+                        <p><i class="fas fa-exclamation-triangle me-2"></i>No rubrics available.</p>
+                        <a href="{% url 'labs:rubric_create' %}" class="btn btn-sm btn-primary">
+                            <i class="fas fa-plus-circle me-1"></i> Create a Rubric
+                        </a>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        
+        <div class="d-grid gap-2">
+            <button type="submit" class="btn btn-primary" id="submit-btn" disabled>
+                <i class="fas fa-check-circle me-1"></i> Assign Selected Rubric
+            </button>
+            <a href="{% url 'labs:rubric_create' %}" class="btn btn-outline-secondary">
+                <i class="fas fa-plus-circle me-1"></i> Create New Rubric
+            </a>
+        </div>
+    </form>
+</div>
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const rubricCards = document.querySelectorAll('.rubric-card');
+        const submitBtn = document.getElementById('submit-btn');
+        const selectedRubricInput = document.getElementById('selected_rubric_id');
+        
+        rubricCards.forEach(card => {
+            card.addEventListener('click', function() {
+                // Remove selected class from all cards
+                rubricCards.forEach(c => c.classList.remove('selected'));
+                
+                // Add selected class to clicked card
+                this.classList.add('selected');
+                
+                // Set hidden input value and enable submit button
+                const rubricId = this.getAttribute('data-rubric-id');
+                selectedRubricInput.value = rubricId;
+                submitBtn.disabled = false;
+            });
+        });
+    });
+</script>
+{% endblock %}
+
+{% endblock %}

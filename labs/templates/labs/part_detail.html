@@ -72,16 +72,28 @@
                         <i class="fas fa-arrow-left me-1"></i> Back to Lab
                     </a>
                     {% if filtered_student %}
-                    <a href="{% url 'labs:student_detail' filtered_student.id %}" class="btn btn-outline-info ms-2">
+                    <a href="{% url 'labs:student_detail' filtered_student.id %}" class="btn btn-outline-info ms-1">
                         <i class="fas fa-user me-1"></i> Back to Student
                     </a>
                     {% endif %}
-                    <a href="{% url 'labs:home' %}?lab_id={{ part.lab.id }}&part_id={{ part.id }}{% if filtered_student %}&student_id={{ filtered_student.student_id }}{% endif %}" class="btn btn-success ms-2">
+                    <a href="{% url 'labs:home' %}?lab_id={{ part.lab.id }}&part_id={{ part.id }}{% if filtered_student %}&student_id={{ filtered_student.student_id }}{% endif %}" class="btn btn-success ms-1">
                         <i class="fas fa-clipboard-check me-1"></i> Grade This Part
                     </a>
-                    <a href="{% url 'labs:export_part_csv' part.id %}" class="btn btn-secondary ms-2">
+                    <a href="{% url 'labs:export_part_csv' part.id %}" class="btn btn-secondary ms-1">
                         <i class="fas fa-file-csv me-1"></i> Export CSV
                     </a>
+                    {% load role_tags %}
+                    {% if request.user|has_role:'instructor' %}
+                    <a href="{% url 'labs:part_edit' part_id=part.id %}" class="btn btn-warning ms-1">
+                        <i class="fas fa-edit me-1"></i> Edit Part
+                    </a>
+                    <a href="{% url 'labs:criteria_list' part_id=part.id %}" class="btn btn-info ms-1">
+                        <i class="fas fa-list-check me-1"></i> Criteria
+                    </a>
+                    <a href="{% url 'labs:assign_rubric' part_id=part.id %}" class="btn btn-dark ms-1">
+                        <i class="fas fa-clipboard-list me-1"></i> Rubric
+                    </a>
+                    {% endif %}
                 </div>
             </div>
             <div class="text-muted mb-3">

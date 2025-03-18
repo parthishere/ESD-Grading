@@ -1,7 +1,10 @@
 from django.shortcuts import render, get_object_or_404
 from django.http import JsonResponse, HttpResponseForbidden, HttpResponseRedirect, HttpResponse
 from .models import *
-from .forms import StudentUploadForm, UserRoleForm
+from .forms import (
+    StudentUploadForm, UserRoleForm, LabForm, PartForm, 
+    QualityCriteriaForm, EvaluationRubricForm, GradeScaleForm
+)
 from django.shortcuts import render, redirect, reverse
 from django.contrib import messages
 from django.contrib.auth.decorators import user_passes_test, login_required
@@ -92,7 +95,47 @@ def lab_list(request):
 def lab_detail(request, lab_id):
     """View details for a lab."""
     lab = get_object_or_404(Lab, pk=lab_id)
-    return render(request, 'labs/lab_detail.html', {'lab': lab})
+    parts = lab.parts.all().order_by('order')
+    return render(request, 'labs/lab_detail.html', {'lab': lab, 'parts': parts})
+
+@login_required
+@instructor_required
+def lab_create(request):
+    """Create a new lab."""
+    if request.method == 'POST':
+        form = LabForm(request.POST)
+        if form.is_valid():
+            lab = form.save()
+            messages.success(request, f'Lab "{lab.name}" created successfully.')
+            return redirect('labs:lab_detail', lab_id=lab.id)
+    else:
+        form = LabForm()
+    
+    return render(request, 'labs/lab_form.html', {
+        'form': form,
+        'title': 'Create Lab'
+    })
+
+@login_required
+@instructor_required
+def lab_edit(request, lab_id):
+    """Edit an existing lab."""
+    lab = get_object_or_404(Lab, pk=lab_id)
+    
+    if request.method == 'POST':
+        form = LabForm(request.POST, instance=lab)
+        if form.is_valid():
+            lab = form.save()
+            messages.success(request, f'Lab "{lab.name}" updated successfully.')
+            return redirect('labs:lab_detail', lab_id=lab.id)
+    else:
+        form = LabForm(instance=lab)
+    
+    return render(request, 'labs/lab_form.html', {
+        'form': form,
+        'lab': lab,
+        'title': 'Edit Lab'
+    })
 
 @login_required
 @ta_required
@@ -111,14 +154,259 @@ def part_detail(request, part_id):
     if part.has_challenges:
         challenges = part.challenges.all()
     
+    # Get evaluation rubrics for selection
+    rubrics = EvaluationRubric.objects.all()
+    
     context = {
         'part': part,
         'quality_criteria': quality_criteria,
         'signoffs': signoffs,
-        'challenges': challenges
+        'challenges': challenges,
+        'rubrics': rubrics
     }
     
     return render(request, 'labs/part_detail.html', context)
+
+@login_required
+@instructor_required
+def part_create(request, lab_id=None):
+    """Create a new lab part."""
+    lab = None
+    if lab_id:
+        lab = get_object_or_404(Lab, pk=lab_id)
+    
+    if request.method == 'POST':
+        form = PartForm(request.POST, lab=lab)
+        if form.is_valid():
+            part = form.save()
+            messages.success(request, f'Part "{part.name}" created successfully.')
+            return redirect('labs:part_detail', part_id=part.id)
+    else:
+        form = PartForm(lab=lab)
+    
+    return render(request, 'labs/part_form.html', {
+        'form': form,
+        'lab': lab,
+        'title': 'Create Lab Part'
+    })
+
+@login_required
+@instructor_required
+def part_edit(request, part_id):
+    """Edit an existing lab part."""
+    part = get_object_or_404(Part, pk=part_id)
+    
+    if request.method == 'POST':
+        form = PartForm(request.POST, instance=part)
+        if form.is_valid():
+            part = form.save()
+            messages.success(request, f'Part "{part.name}" updated successfully.')
+            return redirect('labs:part_detail', part_id=part.id)
+    else:
+        form = PartForm(instance=part)
+    
+    return render(request, 'labs/part_form.html', {
+        'form': form,
+        'part': part,
+        'title': 'Edit Lab Part'
+    })
+
+@login_required
+@instructor_required
+def criteria_list(request, part_id):
+    """List all quality criteria for a part."""
+    part = get_object_or_404(Part, pk=part_id)
+    criteria = part.quality_criteria.all().order_by('name')
+    
+    return render(request, 'labs/criteria_list.html', {
+        'part': part,
+        'criteria': criteria
+    })
+
+@login_required
+@instructor_required
+def criteria_create(request, part_id):
+    """Create a new quality criterion for a part."""
+    part = get_object_or_404(Part, pk=part_id)
+    
+    if request.method == 'POST':
+        form = QualityCriteriaForm(request.POST, part=part)
+        if form.is_valid():
+            criterion = form.save()
+            messages.success(request, f'Criterion "{criterion.name}" created successfully.')
+            return redirect('labs:criteria_list', part_id=part.id)
+    else:
+        form = QualityCriteriaForm(part=part)
+    
+    return render(request, 'labs/criteria_form.html', {
+        'form': form,
+        'part': part,
+        'title': 'Create Quality Criterion'
+    })
+
+@login_required
+@instructor_required
+def criteria_edit(request, criteria_id):
+    """Edit an existing quality criterion."""
+    criterion = get_object_or_404(QualityCriteria, pk=criteria_id)
+    part = criterion.part
+    
+    if request.method == 'POST':
+        form = QualityCriteriaForm(request.POST, instance=criterion)
+        if form.is_valid():
+            criterion = form.save()
+            messages.success(request, f'Criterion "{criterion.name}" updated successfully.')
+            return redirect('labs:criteria_list', part_id=part.id)
+    else:
+        form = QualityCriteriaForm(instance=criterion)
+    
+    return render(request, 'labs/criteria_form.html', {
+        'form': form,
+        'criterion': criterion,
+        'part': part,
+        'title': 'Edit Quality Criterion'
+    })
+
+@login_required
+@instructor_required
+def rubric_list(request):
+    """List all evaluation rubrics."""
+    rubrics = EvaluationRubric.objects.all().order_by('name')
+    
+    return render(request, 'labs/rubric_list.html', {
+        'rubrics': rubrics
+    })
+
+@login_required
+@instructor_required
+def rubric_create(request):
+    """Create a new evaluation rubric."""
+    if request.method == 'POST':
+        form = EvaluationRubricForm(request.POST)
+        if form.is_valid():
+            rubric = form.save(commit=False)
+            
+            # Save criteria data from JSON field
+            criteria_data = form.cleaned_data.get('criteria_json', {})
+            rubric.criteria_data = criteria_data
+            
+            rubric.save()
+            messages.success(request, f'Rubric "{rubric.name}" created successfully.')
+            return redirect('labs:rubric_list')
+    else:
+        form = EvaluationRubricForm()
+    
+    return render(request, 'labs/rubric_form.html', {
+        'form': form,
+        'title': 'Create Evaluation Rubric'
+    })
+
+@login_required
+@instructor_required
+def rubric_edit(request, rubric_id):
+    """Edit an existing evaluation rubric."""
+    rubric = get_object_or_404(EvaluationRubric, pk=rubric_id)
+    
+    if request.method == 'POST':
+        form = EvaluationRubricForm(request.POST, instance=rubric)
+        if form.is_valid():
+            rubric = form.save(commit=False)
+            
+            # Save criteria data from JSON field
+            criteria_data = form.cleaned_data.get('criteria_json', {})
+            rubric.criteria_data = criteria_data
+            
+            rubric.save()
+            messages.success(request, f'Rubric "{rubric.name}" updated successfully.')
+            return redirect('labs:rubric_list')
+    else:
+        form = EvaluationRubricForm(instance=rubric)
+    
+    return render(request, 'labs/rubric_form.html', {
+        'form': form,
+        'rubric': rubric,
+        'title': 'Edit Evaluation Rubric'
+    })
+
+@login_required
+@instructor_required
+def assign_rubric(request, part_id):
+    """Assign a rubric to a part for evaluation."""
+    part = get_object_or_404(Part, pk=part_id)
+    
+    if request.method == 'POST':
+        rubric_id = request.POST.get('rubric_id')
+        
+        if rubric_id:
+            # Set the rubric as the default for this part
+            try:
+                rubric = EvaluationRubric.objects.get(pk=rubric_id)
+                # We could store this in a separate model if needed
+                # Or set a configuration value
+                messages.success(request, f'Rubric "{rubric.name}" assigned to part "{part.name}" successfully.')
+            except EvaluationRubric.DoesNotExist:
+                messages.error(request, 'Selected rubric not found.')
+        else:
+            messages.warning(request, 'No rubric selected.')
+        
+        return redirect('labs:part_detail', part_id=part.id)
+    
+    # This should be an AJAX request, but we'll provide a fallback
+    rubrics = EvaluationRubric.objects.all().order_by('name')
+    
+    return render(request, 'labs/assign_rubric.html', {
+        'part': part,
+        'rubrics': rubrics
+    })
+
+@login_required
+@instructor_required
+def grade_scale_list(request):
+    """List all grade scales."""
+    grade_scales = GradeScale.objects.all().order_by('-is_default', 'name')
+    
+    return render(request, 'labs/grade_scale_list.html', {
+        'grade_scales': grade_scales
+    })
+
+@login_required
+@instructor_required
+def grade_scale_create(request):
+    """Create a new grade scale."""
+    if request.method == 'POST':
+        form = GradeScaleForm(request.POST)
+        if form.is_valid():
+            grade_scale = form.save()
+            messages.success(request, f'Grade scale "{grade_scale.name}" created successfully.')
+            return redirect('labs:grade_scale_list')
+    else:
+        form = GradeScaleForm()
+    
+    return render(request, 'labs/grade_scale_form.html', {
+        'form': form,
+        'title': 'Create Grade Scale'
+    })
+
+@login_required
+@instructor_required
+def grade_scale_edit(request, scale_id):
+    """Edit an existing grade scale."""
+    grade_scale = get_object_or_404(GradeScale, pk=scale_id)
+    
+    if request.method == 'POST':
+        form = GradeScaleForm(request.POST, instance=grade_scale)
+        if form.is_valid():
+            grade_scale = form.save()
+            messages.success(request, f'Grade scale "{grade_scale.name}" updated successfully.')
+            return redirect('labs:grade_scale_list')
+    else:
+        form = GradeScaleForm(instance=grade_scale)
+    
+    return render(request, 'labs/grade_scale_form.html', {
+        'form': form,
+        'grade_scale': grade_scale,
+        'title': 'Edit Grade Scale'
+    })
 
 @login_required
 @ta_required
@@ -825,25 +1113,59 @@ def quick_signoff_submit(request):
             signoff.save()
         
         # Save quality criteria scores
+        error_messages = []
         for criteria_id, score in criteria_scores.items():
             try:
                 criteria = QualityCriteria.objects.get(pk=criteria_id)
+                
+                # Verify criteria belongs to this part
+                if criteria.part.id != part.id:
+                    error_messages.append(f"Criteria '{criteria.name}' does not belong to this part")
+                    continue
+                    
                 # Convert score to integer if it's a string
                 if isinstance(score, str):
                     score = int(score)
+                
+                # The score is a quality level (0-4), convert it to actual points
+                # 0 = Not Applicable (0%)
+                # 1 = Poor/Not Complete (25%)
+                # 2 = Meets Requirements (50%)
+                # 3 = Exceeds Requirements (75%)
+                # 4 = Outstanding (100%)
+                actual_score = 0
+                if score == 0:
+                    actual_score = 0  # Not Applicable
+                elif score == 1:
+                    actual_score = int(criteria.max_points * 0.25)  # Poor/Not Complete
+                elif score == 2:
+                    actual_score = int(criteria.max_points * 0.5)   # Meets Requirements
+                elif score == 3:
+                    actual_score = int(criteria.max_points * 0.75)  # Exceeds Requirements
+                elif score == 4:
+                    actual_score = criteria.max_points  # Outstanding
+                
+                print(f"Converting quality level {score} to actual score {actual_score} (max: {criteria.max_points})")
+                
                 quality_score, _ = QualityScore.objects.update_or_create(
                     signoff=signoff,
                     criteria=criteria,
-                    defaults={'score': score}
+                    defaults={'score': actual_score}
                 )
             except QualityCriteria.DoesNotExist:
-                print(f"Quality criteria with ID {criteria_id} not found")
-                # Skip invalid criteria IDs
+                error_message = f"Quality criteria with ID {criteria_id} not found"
+                print(error_message)
+                error_messages.append(error_message)
                 continue
             except Exception as e:
-                print(f"Error saving quality score for criteria {criteria_id}: {str(e)}")
-                # Skip errors and continue
+                error_message = f"Error saving quality score for criteria {criteria_id}: {str(e)}"
+                print(error_message)
+                error_messages.append(error_message)
                 continue
+        
+        # If there were errors, include them in the response but don't fail the request
+        if error_messages:
+            print(f"Errors during quality criteria processing: {error_messages}")
         
         # Create or update evaluation sheet with the fixed rubric
         rubric = EvaluationRubric.get_default_rubric()
@@ -935,9 +1257,23 @@ def get_signoff_details(request):
             # Get quality scores
             quality_scores = []
             for score in signoff.quality_scores.all():
+                # For consistency, make sure to include both raw score and quality level
+                quality_level = 0  # Default: Not Applicable
+                if score.score > 0:
+                    percentage = score.score / score.criteria.max_points
+                    if percentage > 0.75:
+                        quality_level = 4  # Outstanding
+                    elif percentage > 0.5:
+                        quality_level = 3  # Exceeds Requirements  
+                    elif percentage > 0.25:
+                        quality_level = 2  # Meets Requirements
+                    else:
+                        quality_level = 1  # Poor/Not Complete
+                        
                 quality_scores.append({
                     'criteria_id': score.criteria.id,
-                    'score': score.score,
+                    'score': quality_level,  # This is what's used by the UI (0-4)
+                    'raw_score': score.score,  # The actual point value
                     'criteria__max_points': score.criteria.max_points
                 })
             
@@ -1583,18 +1919,34 @@ def quick_stats(request):
         avg_completion = 0
         
     # Count challenges and completed challenges
-    total_challenges = Challenge.objects.count()
-    # Use a more compatible way to count unique challenge completions
-    challenge_scores = ChallengeScore.objects.filter(score__gt=0)
-    completed_challenges = len(set([(score.challenge_id, score.signoff.student_id) for score in challenge_scores]))
-    
-    # Calculate more accurate challenge completion rate
-    active_students = Student.objects.filter(active=True).count()
-    if active_students > 0 and total_challenges > 0:
-        # Total possible completions = active students * available challenges
-        total_possible = active_students * total_challenges
-        challenge_completion = round((completed_challenges / total_possible) * 100, 1)
-    else:
+    try:
+        total_challenges = Challenge.objects.count()
+        # Use a more compatible way to count unique challenge completions
+        challenge_scores = ChallengeScore.objects.filter(score__gt=0)
+        
+        # Create a set of unique (challenge_id, student_id) tuples for completed challenges
+        completed_challenge_tuples = []
+        for score in challenge_scores:
+            try:
+                completed_challenge_tuples.append((score.challenge_id, score.signoff.student_id))
+            except Exception as e:
+                print(f"Error processing challenge score: {e}")
+                continue
+                
+        completed_challenges = len(set(completed_challenge_tuples))
+        
+        # Calculate more accurate challenge completion rate
+        active_students = Student.objects.filter(active=True).count()
+        if active_students > 0 and total_challenges > 0:
+            # Total possible completions = active students * available challenges
+            total_possible = active_students * total_challenges
+            challenge_completion = round((completed_challenges / total_possible) * 100, 1)
+        else:
+            challenge_completion = 0
+    except Exception as e:
+        print(f"Error calculating challenge statistics: {e}")
+        total_challenges = 0
+        completed_challenges = 0
         challenge_completion = 0
     
     # Count students who have status 'ER' in any evaluation
@@ -1613,23 +1965,31 @@ def quick_stats(request):
     for grade in ['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D+', 'D', 'D-', 'F']:
         grade_distribution[grade] = 0
     
-    # Get all labs
-    labs = Lab.objects.all()
-    # Use the first lab's grade scale, or fall back to the default
-    lab_grade_scale = None
-    if labs.exists():
-        first_lab = labs.first()
-        lab_grade_scale = first_lab.grade_scale
-    
-    # If no lab has a grade scale, use the default
-    if not lab_grade_scale:
-        lab_grade_scale = GradeScale.get_default_scale()
-    
-    # Calculate actual grade distribution using the proper grade scale
-    for student in students:
-        overall_grade = student.get_overall_grade()
-        letter_grade = lab_grade_scale.get_letter_grade(overall_grade)
-        grade_distribution[letter_grade] = grade_distribution.get(letter_grade, 0) + 1
+    try:
+        # Get all labs
+        labs = Lab.objects.all()
+        # Use the first lab's grade scale, or fall back to the default
+        lab_grade_scale = None
+        if labs.exists():
+            first_lab = labs.first()
+            lab_grade_scale = first_lab.grade_scale
+        
+        # If no lab has a grade scale, use the default
+        if not lab_grade_scale:
+            lab_grade_scale = GradeScale.get_default_scale()
+        
+        # Calculate actual grade distribution using the proper grade scale
+        for student in students:
+            try:
+                overall_grade = student.get_overall_grade()
+                letter_grade = lab_grade_scale.get_letter_grade(overall_grade)
+                grade_distribution[letter_grade] = grade_distribution.get(letter_grade, 0) + 1
+            except Exception as e:
+                print(f"Error calculating grade for student {student.id}: {e}")
+                # Default to F grade if calculation fails
+                grade_distribution['F'] = grade_distribution.get('F', 0) + 1
+    except Exception as e:
+        print(f"Error calculating grade distribution: {e}")
     
     # Calculate challenge completion by student
     challenge_completion_by_student = {
@@ -1640,28 +2000,35 @@ def quick_stats(request):
         'complete': 0       # >90%
     }
     
-    # Group students by challenge completion percentage
-    for student in students:
-        # Count total completed challenges for this student
-        student_completed = ChallengeScore.objects.filter(score__gt=0, signoff__student=student).count()
-        
-        if student_completed == 0:
-            challenge_completion_by_student['not_attempted'] += 1
-        else:
-            # Calculate percentage of all challenges completed
-            if total_challenges > 0:
-                completion_pct = (student_completed / total_challenges) * 100
+    try:
+        # Group students by challenge completion percentage
+        for student in students:
+            try:
+                # Count total completed challenges for this student
+                student_completed = ChallengeScore.objects.filter(score__gt=0, signoff__student=student).count()
                 
-                if completion_pct >= 90:
-                    challenge_completion_by_student['complete'] += 1
-                elif completion_pct >= 75:
-                    challenge_completion_by_student['high'] += 1
-                elif completion_pct >= 50:
-                    challenge_completion_by_student['medium'] += 1
+                if student_completed == 0:
+                    challenge_completion_by_student['not_attempted'] += 1
                 else:
-                    challenge_completion_by_student['low'] += 1
-            else:
+                    # Calculate percentage of all challenges completed
+                    if total_challenges > 0:
+                        completion_pct = (student_completed / total_challenges) * 100
+                        
+                        if completion_pct >= 90:
+                            challenge_completion_by_student['complete'] += 1
+                        elif completion_pct >= 75:
+                            challenge_completion_by_student['high'] += 1
+                        elif completion_pct >= 50:
+                            challenge_completion_by_student['medium'] += 1
+                        else:
+                            challenge_completion_by_student['low'] += 1
+                    else:
+                        challenge_completion_by_student['not_attempted'] += 1
+            except Exception as e:
+                print(f"Error calculating challenge completion for student {student.id}: {e}")
                 challenge_completion_by_student['not_attempted'] += 1
+    except Exception as e:
+        print(f"Error calculating overall challenge completion: {e}")
     
     return JsonResponse({
         'total_signoffs': total_signoffs,

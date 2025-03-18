@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ title }} | ESD Lab Grading{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-container {
+        max-width: 800px;
+        margin: 0 auto;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container form-container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h2">{{ title }}</h1>
+        <a href="{% if lab %}{% url 'labs:lab_detail' lab_id=lab.id %}{% else %}{% url 'labs:lab_list' %}{% endif %}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left me-1"></i> Back
+        </a>
+    </div>
+    
+    <div class="card">
+        <div class="card-body">
+            <form method="post">
+                {% csrf_token %}
+                
+                <div class="mb-3">
+                    <label for="id_name" class="form-label">Lab Name</label>
+                    {{ form.name.errors }}
+                    <input type="text" name="name" id="id_name" class="form-control" value="{{ form.name.value|default:'' }}" required>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="id_description" class="form-label">Description</label>
+                    {{ form.description.errors }}
+                    <textarea name="description" id="id_description" class="form-control" rows="4">{{ form.description.value|default:'' }}</textarea>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="id_due_date" class="form-label">Due Date</label>
+                    {{ form.due_date.errors }}
+                    <input type="datetime-local" name="due_date" id="id_due_date" class="form-control" value="{{ form.due_date.value|date:'Y-m-d\TH:i'|default:'' }}" required>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="id_total_points" class="form-label">Total Points</label>
+                    {{ form.total_points.errors }}
+                    <input type="number" name="total_points" id="id_total_points" class="form-control" step="0.01" min="0" value="{{ form.total_points.value|default:'' }}" required>
+                    <div class="form-text">Total points for the lab (calculated from parts will be shown on detail page)</div>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="id_grade_scale" class="form-label">Grade Scale</label>
+                    {{ form.grade_scale.errors }}
+                    <select name="grade_scale" id="id_grade_scale" class="form-select">
+                        <option value="">Use Default Grade Scale</option>
+                        {% for scale_id, scale_name in form.fields.grade_scale.choices %}
+                        {% if scale_id %}
+                        <option value="{{ scale_id }}" {% if form.grade_scale.value|stringformat:"i" == scale_id|stringformat:"i" %}selected{% endif %}>{{ scale_name }}</option>
+                        {% endif %}
+                        {% endfor %}
+                    </select>
+                    <div class="form-text">Select a grade scale or use the default scale</div>
+                </div>
+                
+                <div class="d-grid">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-1"></i> Save Lab
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

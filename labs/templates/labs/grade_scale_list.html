@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Grade Scales | ESD Lab Grading{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h2">Grade Scales</h1>
+        <div>
+            <a href="{% url 'labs:grade_scale_create' %}" class="btn btn-primary">
+                <i class="fas fa-plus-circle me-1"></i> Create New Grade Scale
+            </a>
+        </div>
+    </div>
+    
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Description</th>
+                            <th>Status</th>
+                            <th>A Range</th>
+                            <th>B Range</th>
+                            <th>C Range</th>
+                            <th>D Range</th>
+                            <th class="text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for scale in grade_scales %}
+                        <tr>
+                            <td>{{ scale.name }}</td>
+                            <td>{{ scale.description|truncatechars:50 }}</td>
+                            <td>
+                                {% if scale.is_default %}
+                                <span class="badge bg-success">Default</span>
+                                {% else %}
+                                <span class="badge bg-secondary">Standard</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                A+: {{ scale.a_plus_threshold }}%+<br>
+                                A: {{ scale.a_threshold }}%+<br>
+                                A-: {{ scale.a_minus_threshold }}%+
+                            </td>
+                            <td>
+                                B+: {{ scale.b_plus_threshold }}%+<br>
+                                B: {{ scale.b_threshold }}%+<br>
+                                B-: {{ scale.b_minus_threshold }}%+
+                            </td>
+                            <td>
+                                C+: {{ scale.c_plus_threshold }}%+<br>
+                                C: {{ scale.c_threshold }}%+<br>
+                                C-: {{ scale.c_minus_threshold }}%+
+                            </td>
+                            <td>
+                                D+: {{ scale.d_plus_threshold }}%+<br>
+                                D: {{ scale.d_threshold }}%+<br>
+                                D-: {{ scale.d_minus_threshold }}%+
+                            </td>
+                            <td class="text-center">
+                                <a href="{% url 'labs:grade_scale_edit' scale_id=scale.id %}" class="btn btn-sm btn-primary">
+                                    <i class="fas fa-edit"></i> Edit
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="8" class="text-center">
+                                <div class="alert alert-info">
+                                    <p><i class="fas fa-info-circle me-2"></i>No grade scales defined yet.</p>
+                                    <a href="{% url 'labs:grade_scale_create' %}" class="btn btn-sm btn-primary">
+                                        <i class="fas fa-plus-circle me-1"></i> Create First Grade Scale
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

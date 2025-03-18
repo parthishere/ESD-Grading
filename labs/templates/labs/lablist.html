@@ -31,6 +31,15 @@
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h1 class="h2"><i class="fas fa-flask me-2"></i>Course Labs</h1>
         <div>
+            {% load role_tags %}
+            {% if request.user|has_role:'instructor' %}
+            <a href="{% url 'labs:lab_create' %}" class="btn btn-success me-2">
+                <i class="fas fa-plus-circle me-1"></i> Create New Lab
+            </a>
+            <a href="{% url 'labs:part_create' %}" class="btn btn-info me-2">
+                <i class="fas fa-plus-circle me-1"></i> Create New Part
+            </a>
+            {% endif %}
             <a href="{% url 'labs:reports' %}" class="btn btn-primary">
                 <i class="fas fa-chart-bar me-1"></i> Lab Reports
             </a>
@@ -82,6 +91,15 @@
                         <a href="{% url 'labs:lab_report' lab.id %}" class="btn btn-outline-secondary">
                             <i class="fas fa-chart-bar me-1"></i> Lab Report
                         </a>
+                        {% load role_tags %}
+                        {% if request.user|has_role:'instructor' %}
+                        <a href="{% url 'labs:part_create_for_lab' lab_id=lab.id %}" class="btn btn-outline-info">
+                            <i class="fas fa-plus-circle me-1"></i> Add Part
+                        </a>
+                        <a href="{% url 'labs:lab_edit' lab_id=lab.id %}" class="btn btn-outline-warning">
+                            <i class="fas fa-edit me-1"></i> Edit Lab
+                        </a>
+                        {% endif %}
                     </div>
                 </div>
             </div>

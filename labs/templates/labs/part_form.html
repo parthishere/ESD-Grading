@@ -1,0 +1,96 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ title }} | ESD Lab Grading{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-container {
+        max-width: 800px;
+        margin: 0 auto;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container form-container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h2">{{ title }}</h1>
+        <a href="{% if part %}{% url 'labs:part_detail' part_id=part.id %}{% elif lab %}{% url 'labs:lab_detail' lab_id=lab.id %}{% else %}{% url 'labs:lab_list' %}{% endif %}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left me-1"></i> Back
+        </a>
+    </div>
+    
+    <div class="card">
+        <div class="card-body">
+            <form method="post">
+                {% csrf_token %}
+                
+                {% if not lab %}
+                <div class="mb-3">
+                    <label for="id_lab" class="form-label">Lab</label>
+                    {{ form.lab.errors }}
+                    <select name="lab" id="id_lab" class="form-select" required>
+                        <option value="">Select Lab</option>
+                        {% for lab_id, lab_name in form.fields.lab.choices %}
+                        {% if lab_id %}
+                        <option value="{{ lab_id }}" {% if form.lab.value|stringformat:"i" == lab_id|stringformat:"i" %}selected{% endif %}>{{ lab_name }}</option>
+                        {% endif %}
+                        {% endfor %}
+                    </select>
+                </div>
+                {% else %}
+                <input type="hidden" name="lab" value="{{ lab.id }}">
+                <div class="alert alert-info">
+                    Creating part for lab: <strong>{{ lab.name }}</strong>
+                </div>
+                {% endif %}
+                
+                <div class="mb-3">
+                    <label for="id_name" class="form-label">Part Name</label>
+                    {{ form.name.errors }}
+                    <input type="text" name="name" id="id_name" class="form-control" value="{{ form.name.value|default:'' }}" required>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="id_description" class="form-label">Description</label>
+                    {{ form.description.errors }}
+                    <textarea name="description" id="id_description" class="form-control" rows="4">{{ form.description.value|default:'' }}</textarea>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="id_order" class="form-label">Order</label>
+                    {{ form.order.errors }}
+                    <input type="number" name="order" id="id_order" class="form-control" value="{{ form.order.value|default:'0' }}" min="0" required>
+                    <div class="form-text">Numeric order for sorting (0, 1, 2, etc.)</div>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="id_due_date" class="form-label">Due Date</label>
+                    {{ form.due_date.errors }}
+                    <input type="datetime-local" name="due_date" id="id_due_date" class="form-control" value="{{ form.due_date.value|date:'Y-m-d\TH:i'|default:'' }}">
+                    <div class="form-text">Optional. If not set, lab due date will be used.</div>
+                </div>
+                
+                <div class="mb-3 form-check">
+                    <input type="checkbox" name="is_required" id="id_is_required" class="form-check-input" {% if form.is_required.value %}checked{% endif %}>
+                    <label for="id_is_required" class="form-check-label">Required Part</label>
+                    <div class="form-text">If checked, this part is required for lab completion.</div>
+                </div>
+                
+                <div class="mb-3 form-check">
+                    <input type="checkbox" name="has_challenges" id="id_has_challenges" class="form-check-input" {% if form.has_challenges.value %}checked{% endif %}>
+                    <label for="id_has_challenges" class="form-check-label">Has Challenge Tasks</label>
+                    <div class="form-text">If checked, this part can have challenge tasks for bonus points.</div>
+                </div>
+                
+                <div class="d-grid">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-1"></i> Save Part
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,218 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ title }} | ESD Lab Grading{% endblock %}
+
+{% block extra_css %}
+<style>
+    .form-container {
+        max-width: 900px;
+        margin: 0 auto;
+    }
+    .grade-table th {
+        width: 120px;
+    }
+    .grade-info {
+        font-size: 0.875rem;
+    }
+    .grade-thresholds {
+        max-width: 700px;
+        margin: 0 auto;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container form-container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h2">{{ title }}</h1>
+        <a href="{% url 'labs:grade_scale_list' %}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left me-1"></i> Back to Grade Scales
+        </a>
+    </div>
+    
+    <div class="card">
+        <div class="card-body">
+            <form method="post">
+                {% csrf_token %}
+                
+                <div class="mb-3">
+                    <label for="id_name" class="form-label">Scale Name</label>
+                    {{ form.name.errors }}
+                    <input type="text" name="name" id="id_name" class="form-control" value="{{ form.name.value|default:'' }}" required>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="id_description" class="form-label">Description</label>
+                    {{ form.description.errors }}
+                    <textarea name="description" id="id_description" class="form-control" rows="3">{{ form.description.value|default:'' }}</textarea>
+                </div>
+                
+                <div class="mb-3 form-check">
+                    <input type="checkbox" name="is_default" id="id_is_default" class="form-check-input" {% if form.is_default.value %}checked{% endif %}>
+                    <label for="id_is_default" class="form-check-label">Default Grade Scale</label>
+                    <div class="form-text">If checked, this scale will be used as the default when no specific scale is selected. Only one scale can be the default.</div>
+                </div>
+                
+                <h4 class="mb-3 mt-4 text-center">Grade Thresholds</h4>
+                <p class="text-muted text-center mb-4">Enter the minimum percentage required for each grade level.</p>
+                
+                <div class="grade-thresholds">
+                    <div class="card mb-4">
+                        <div class="card-header bg-success text-white">
+                            <h5 class="mb-0">A Range</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <label for="id_a_plus_threshold" class="form-label">A+</label>
+                                    {{ form.a_plus_threshold.errors }}
+                                    <div class="input-group">
+                                        <input type="number" name="a_plus_threshold" id="id_a_plus_threshold" class="form-control" value="{{ form.a_plus_threshold.value|default:'97.0' }}" step="0.1" min="0" max="100" required>
+                                        <span class="input-group-text">%</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label for="id_a_threshold" class="form-label">A</label>
+                                    {{ form.a_threshold.errors }}
+                                    <div class="input-group">
+                                        <input type="number" name="a_threshold" id="id_a_threshold" class="form-control" value="{{ form.a_threshold.value|default:'93.0' }}" step="0.1" min="0" max="100" required>
+                                        <span class="input-group-text">%</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label for="id_a_minus_threshold" class="form-label">A-</label>
+                                    {{ form.a_minus_threshold.errors }}
+                                    <div class="input-group">
+                                        <input type="number" name="a_minus_threshold" id="id_a_minus_threshold" class="form-control" value="{{ form.a_minus_threshold.value|default:'90.0' }}" step="0.1" min="0" max="100" required>
+                                        <span class="input-group-text">%</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card mb-4">
+                        <div class="card-header bg-primary text-white">
+                            <h5 class="mb-0">B Range</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <label for="id_b_plus_threshold" class="form-label">B+</label>
+                                    {{ form.b_plus_threshold.errors }}
+                                    <div class="input-group">
+                                        <input type="number" name="b_plus_threshold" id="id_b_plus_threshold" class="form-control" value="{{ form.b_plus_threshold.value|default:'87.0' }}" step="0.1" min="0" max="100" required>
+                                        <span class="input-group-text">%</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label for="id_b_threshold" class="form-label">B</label>
+                                    {{ form.b_threshold.errors }}
+                                    <div class="input-group">
+                                        <input type="number" name="b_threshold" id="id_b_threshold" class="form-control" value="{{ form.b_threshold.value|default:'83.0' }}" step="0.1" min="0" max="100" required>
+                                        <span class="input-group-text">%</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label for="id_b_minus_threshold" class="form-label">B-</label>
+                                    {{ form.b_minus_threshold.errors }}
+                                    <div class="input-group">
+                                        <input type="number" name="b_minus_threshold" id="id_b_minus_threshold" class="form-control" value="{{ form.b_minus_threshold.value|default:'80.0' }}" step="0.1" min="0" max="100" required>
+                                        <span class="input-group-text">%</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card mb-4">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0">C Range</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <label for="id_c_plus_threshold" class="form-label">C+</label>
+                                    {{ form.c_plus_threshold.errors }}
+                                    <div class="input-group">
+                                        <input type="number" name="c_plus_threshold" id="id_c_plus_threshold" class="form-control" value="{{ form.c_plus_threshold.value|default:'77.0' }}" step="0.1" min="0" max="100" required>
+                                        <span class="input-group-text">%</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label for="id_c_threshold" class="form-label">C</label>
+                                    {{ form.c_threshold.errors }}
+                                    <div class="input-group">
+                                        <input type="number" name="c_threshold" id="id_c_threshold" class="form-control" value="{{ form.c_threshold.value|default:'73.0' }}" step="0.1" min="0" max="100" required>
+                                        <span class="input-group-text">%</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label for="id_c_minus_threshold" class="form-label">C-</label>
+                                    {{ form.c_minus_threshold.errors }}
+                                    <div class="input-group">
+                                        <input type="number" name="c_minus_threshold" id="id_c_minus_threshold" class="form-control" value="{{ form.c_minus_threshold.value|default:'70.0' }}" step="0.1" min="0" max="100" required>
+                                        <span class="input-group-text">%</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card mb-4">
+                        <div class="card-header bg-warning text-dark">
+                            <h5 class="mb-0">D Range</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-4 mb-3">
+                                    <label for="id_d_plus_threshold" class="form-label">D+</label>
+                                    {{ form.d_plus_threshold.errors }}
+                                    <div class="input-group">
+                                        <input type="number" name="d_plus_threshold" id="id_d_plus_threshold" class="form-control" value="{{ form.d_plus_threshold.value|default:'67.0' }}" step="0.1" min="0" max="100" required>
+                                        <span class="input-group-text">%</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label for="id_d_threshold" class="form-label">D</label>
+                                    {{ form.d_threshold.errors }}
+                                    <div class="input-group">
+                                        <input type="number" name="d_threshold" id="id_d_threshold" class="form-control" value="{{ form.d_threshold.value|default:'63.0' }}" step="0.1" min="0" max="100" required>
+                                        <span class="input-group-text">%</span>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <label for="id_d_minus_threshold" class="form-label">D-</label>
+                                    {{ form.d_minus_threshold.errors }}
+                                    <div class="input-group">
+                                        <input type="number" name="d_minus_threshold" id="id_d_minus_threshold" class="form-control" value="{{ form.d_minus_threshold.value|default:'60.0' }}" step="0.1" min="0" max="100" required>
+                                        <span class="input-group-text">%</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="alert alert-danger">
+                        <strong>F Grade:</strong> Any score below the D- threshold ({{ form.d_minus_threshold.value|default:'60.0' }}%)
+                    </div>
+                </div>
+                
+                <div class="alert alert-info mb-4">
+                    <h5>Grade Scale Information</h5>
+                    <p>Each threshold represents the minimum percentage needed to achieve that grade.</p>
+                    <p>For example, if A is set to 93.0%, then students need at least 93.0% to get an A. Students with 92.9% would get an A-.</p>
+                    <p><strong>Important:</strong> Thresholds must be in descending order (A+ > A > A- > B+ > etc.).</p>
+                </div>
+                
+                <div class="d-grid">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save me-1"></i> Save Grade Scale
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}

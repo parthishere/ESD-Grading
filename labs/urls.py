@@ -12,19 +12,30 @@ urlpatterns = [
     
     path('labs/', views.lab_list, name='lab_list'),
     path('lab/<int:lab_id>/', views.lab_detail, name='lab_detail'),
-    # path('lab/create/', views.lab_create, name='lab_create'),
-    # path('lab/edit/<int:pk>/', views.lab_edit, name='lab_edit'),
-    # path('lab/<int:lab_id>/parts/', views.part_list, name='part_list'),
+    path('lab/create/', views.lab_create, name='lab_create'),
+    path('lab/edit/<int:lab_id>/', views.lab_edit, name='lab_edit'),
     
     # Part management URLs
     path('part/<int:part_id>/', views.part_detail, name='part_detail'),
-    # path('part/create/<int:lab_id>/', views.part_create, name='part_create'),
-    # path('part/edit/<int:pk>/', views.part_edit, name='part_edit'),
-    # path('part/<int:part_id>/criteria/', views.criteria_list, name='criteria_list'),
+    path('part/create/', views.part_create, name='part_create'),
+    path('part/create/<int:lab_id>/', views.part_create, name='part_create_for_lab'),
+    path('part/edit/<int:part_id>/', views.part_edit, name='part_edit'),
+    path('part/<int:part_id>/criteria/', views.criteria_list, name='criteria_list'),
     
     # Criteria management URLs
-    # path('criteria/create/<int:part_id>/', views.criteria_create, name='criteria_create'),
-    # path('criteria/edit/<int:pk>/', views.criteria_edit, name='criteria_edit'),
+    path('criteria/create/<int:part_id>/', views.criteria_create, name='criteria_create'),
+    path('criteria/edit/<int:criteria_id>/', views.criteria_edit, name='criteria_edit'),
+    
+    # Rubric management URLs
+    path('rubrics/', views.rubric_list, name='rubric_list'),
+    path('rubric/create/', views.rubric_create, name='rubric_create'),
+    path('rubric/edit/<int:rubric_id>/', views.rubric_edit, name='rubric_edit'),
+    path('part/<int:part_id>/assign-rubric/', views.assign_rubric, name='assign_rubric'),
+    
+    # Grade scale management URLs
+    path('grade-scales/', views.grade_scale_list, name='grade_scale_list'),
+    path('grade-scale/create/', views.grade_scale_create, name='grade_scale_create'),
+    path('grade-scale/edit/<int:scale_id>/', views.grade_scale_edit, name='grade_scale_edit'),
     
     # Student management URLs
     path('students/', views.student_list, name='student_list'),

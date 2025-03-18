@@ -46,8 +46,11 @@
                         </a>
                         <ul class="dropdown-menu">
                             <li><a class="dropdown-item" href="{% url 'labs:lab_list' %}">View All Labs</a></li>
-                            {% if request.user.is_staff %}
-                            <li><a class="dropdown-item" href="#">Create New Lab</a></li>
+                            {% if request.user|has_role:'instructor' %}
+                            <li><a class="dropdown-item" href="{% url 'labs:lab_create' %}">Create New Lab</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="{% url 'labs:rubric_list' %}">Evaluation Rubrics</a></li>
+                            <li><a class="dropdown-item" href="{% url 'labs:rubric_create' %}">Create New Rubric</a></li>
                             {% endif %}
                         </ul>
                     </li>

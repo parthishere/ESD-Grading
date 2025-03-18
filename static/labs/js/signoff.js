@@ -639,15 +639,16 @@ document.addEventListener("DOMContentLoaded", function () {
           // Set criteria scores
           if (data.quality_scores && data.quality_scores.length > 0) {
             data.quality_scores.forEach((score) => {
-              const scoreValue = calculateRadioValue(
-                score.score,
-                score.criteria__max_points
-              );
+              // score.score now contains the quality level directly (0-4)
+              console.log(`Setting criteria ${score.criteria_id} to quality level ${score.score} (${score.raw_score}/${score.criteria__max_points} points)`);
+              
               const radio = document.querySelector(
-                `input[name="criteria_${score.criteria_id}"][value="${scoreValue}"]`
+                `input[name="criteria_${score.criteria_id}"][value="${score.score}"]`
               );
               if (radio) {
                 radio.checked = true;
+              } else {
+                console.warn(`Could not find radio for criteria ${score.criteria_id} with value ${score.score}`);
               }
             });
           }

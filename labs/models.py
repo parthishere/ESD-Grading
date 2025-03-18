@@ -226,39 +226,62 @@ class Part(models.Model):
         
     def get_max_score(self):
         """Get the maximum possible score for this part."""
-        total_score = Decimal('0')
-        
-        # Get quality criteria score potential
-        criteria = self.quality_criteria.all()
-        if criteria:
-            total_score += sum(Decimal(str(c.max_points)) for c in criteria)
-        
-        # Add challenge points if this part has challenges
-        if self.has_challenges:
-            challenges = self.challenges.all()
-            if challenges:
-                total_score += sum(Decimal(str(c.max_points)) for c in challenges)
-        
-        # Check if any signoffs for this part have evaluation sheets
-        found_eval_sheet = False
-        signoffs = self.signoffs.all()
-        for signoff in signoffs:
-            try:
-                eval_sheet = signoff.evaluation_sheet.first()
-                if eval_sheet and hasattr(eval_sheet, 'rubric') and eval_sheet.rubric:
-                    total_score += eval_sheet.get_total_max_marks()
-                    found_eval_sheet = True
-                    break  # We just need one evaluation sheet to get the max marks
-            except:
-                pass
-                
-        # If no evaluation sheets found, use default rubric
-        if not found_eval_sheet:
-            # Get default rubric's max marks
-            default_rubric = EvaluationRubric.get_default_rubric()
-            total_score += default_rubric.get_total_max_marks()
+        try:
+            total_score = Decimal('0')
             
-        return total_score
+            # Get quality criteria score potential
+            criteria = self.quality_criteria.all()
+            if criteria:
+                for c in criteria:
+                    try:
+                        total_score += Decimal(str(c.max_points))
+                    except Exception as e:
+                        print(f"Error adding quality criteria {c.id} max points: {e}")
+            
+            # Add challenge points if this part has challenges
+            if self.has_challenges:
+                challenges = self.challenges.all()
+                if challenges:
+                    for c in challenges:
+                        try:
+                            total_score += Decimal(str(c.max_points))
+                        except Exception as e:
+                            print(f"Error adding challenge {c.id} max points: {e}")
+            
+            # Check if any signoffs for this part have evaluation sheets
+            found_eval_sheet = False
+            signoffs = self.signoffs.all()
+            for signoff in signoffs:
+                try:
+                    eval_sheet = signoff.evaluation_sheet.first()
+                    if eval_sheet and hasattr(eval_sheet, 'rubric') and eval_sheet.rubric:
+                        eval_max_marks = eval_sheet.get_total_max_marks()
+                        total_score += eval_max_marks
+                        found_eval_sheet = True
+                        break  # We just need one evaluation sheet to get the max marks
+                except Exception as e:
+                    print(f"Error getting evaluation sheet max marks for signoff {signoff.id}: {e}")
+                    continue
+                    
+            # If no evaluation sheets found, use default rubric
+            if not found_eval_sheet:
+                try:
+                    # Get default rubric's max marks
+                    default_rubric = EvaluationRubric.get_default_rubric()
+                    if default_rubric:
+                        rubric_max_marks = default_rubric.get_total_max_marks()
+                        total_score += rubric_max_marks
+                except Exception as e:
+                    print(f"Error getting default rubric max marks: {e}")
+                    # If we can't get a default rubric, add a reasonable default
+                    total_score += Decimal('60.0')
+                
+            return total_score
+            
+        except Exception as e:
+            print(f"Error calculating max score for part {self.id}: {e}")
+            # Return a reasonable default
+            return Decimal('100.0')
         
     def get_student_score(self, student):
         """Get a student's score for this part."""
@@ -752,9 +775,9 @@ class EvaluationSheet(models.Model):
     # Map status to score percentage
     STATUS_TO_SCORE = {
         'ER': 1.0,    # 100% of max marks
-        'MR': 0.85,   # 85% of max marks
-        'MM': 0.70,   # 70% of max marks
-        'IR': 0.50,   # 50% of max marks
+        'MR': 0.75,   # 85% of max marks
+        'MM': 0.50,   # 70% of max marks
+        'IR': 0.25,   # 50% of max marks
         'ND': 0.0     # 0% of max marks
     }
     
@@ -784,20 +807,54 @@ class EvaluationSheet(models.Model):
     
     def get_total_max_marks(self):
         """Get total maximum possible marks for this evaluation sheet."""
-        return sum(Decimal(str(criteria['max_marks'])) for criteria in self.rubric.criteria_data.values())
+        try:
+            if not self.rubric or not hasattr(self.rubric, 'criteria_data'):
+                # If no rubric defined, use a fallback default
+                print(f"Warning: No valid rubric for evaluation sheet {self.id}, using fallback")
+                return Decimal('60.0')  # Default sum of all standard criteria
+                
+            # Sum up max marks from all criteria in the rubric
+            total = Decimal('0')
+            for criteria_key, criteria_data in self.rubric.criteria_data.items():
+                if isinstance(criteria_data, dict) and 'max_marks' in criteria_data:
+                    try:
+                        total += Decimal(str(criteria_data['max_marks']))
+                    except (ValueError, TypeError) as e:
+                        # If we can't convert to decimal, use a default value
+                        print(f"Warning: Invalid max_marks value for criteria {criteria_key}: {e}")
+                        total += Decimal('5.0')  # Default value
+            return total
+        except Exception as e:
+            print(f"Error calculating max marks for evaluation sheet {self.id}: {e}")
+            return Decimal('60.0')  # Default fallback
     
     def get_earned_marks(self):
         """Calculate total marks earned based on status of each field."""
         total_earned = Decimal('0')
         
-        # Calculate for each field
-        for field, status in self.evaluations.items():
-            if field in self.rubric.criteria_data:
-                max_marks = Decimal(str(self.rubric.criteria_data[field]['max_marks']))
-                score_percentage = Decimal(str(self.STATUS_TO_SCORE.get(status, 0)))
-                total_earned += max_marks * score_percentage
+        try:
+            # Check if rubric exists
+            if not self.rubric or not hasattr(self.rubric, 'criteria_data'):
+                return total_earned
                 
-        return total_earned
+            # Calculate for each field
+            for field, status in self.evaluations.items():
+                try:
+                    if field in self.rubric.criteria_data:
+                        criteria_data = self.rubric.criteria_data[field]
+                        if isinstance(criteria_data, dict) and 'max_marks' in criteria_data:
+                            max_marks = Decimal(str(criteria_data['max_marks']))
+                            score_percentage = Decimal(str(self.STATUS_TO_SCORE.get(status, 0)))
+                            total_earned += max_marks * score_percentage
+                except (ValueError, TypeError, KeyError) as e:
+                    print(f"Error calculating earned marks for field {field}: {e}")
+                    continue
+                    
+            return total_earned
+            
+        except Exception as e:
+            print(f"Error calculating total earned marks: {e}")
+            return Decimal('0')
     
     def get_percentage(self):
         """Get percentage of marks earned."""
@@ -809,11 +866,20 @@ class EvaluationSheet(models.Model):
         
     def get_criterion_earned_marks(self, criterion):
         """Calculate earned marks for a specific criterion."""
-        if criterion in self.rubric.criteria_data and criterion in self.evaluations:
-            max_marks = Decimal(str(self.rubric.criteria_data[criterion]['max_marks']))
-            status = self.evaluations.get(criterion, 'ND')
-            return max_marks * Decimal(str(self.STATUS_TO_SCORE.get(status, 0)))
-        return Decimal('0')
+        try:
+            if not self.rubric or not hasattr(self.rubric, 'criteria_data'):
+                return Decimal('0')
+                
+            if criterion in self.rubric.criteria_data and criterion in self.evaluations:
+                criteria_data = self.rubric.criteria_data[criterion]
+                if isinstance(criteria_data, dict) and 'max_marks' in criteria_data:
+                    max_marks = Decimal(str(criteria_data['max_marks']))
+                    status = self.evaluations.get(criterion, 'ND')
+                    return max_marks * Decimal(str(self.STATUS_TO_SCORE.get(status, 0)))
+            return Decimal('0')
+        except Exception as e:
+            print(f"Error calculating earned marks for criterion {criterion}: {e}")
+            return Decimal('0')
         
     def get_criterion_display(self, criterion):
         """Get display name for a criterion's status."""
