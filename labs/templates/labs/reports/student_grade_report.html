@@ -159,10 +159,10 @@
                                 <div class="card-body text-center">
                                     <h4 class="card-title h5">Lab Grade</h4>
                                     <div class="progress mb-2" style="height: 20px;">
-                                        <div class="progress-bar {% if lab_data.lab.get_student_percentage >= 90 %}bg-success{% elif lab_data.lab.get_student_percentage >= 70 %}bg-info{% elif lab_data.lab.get_student_percentage >= 50 %}bg-warning{% else %}bg-danger{% endif %}" 
+                                        <div class="progress-bar {% if lab_data.completion_percentage >= 90 %}bg-success{% elif lab_data.completion_percentage >= 70 %}bg-info{% elif lab_data.completion_percentage >= 50 %}bg-warning{% else %}bg-danger{% endif %}" 
                                              role="progressbar" 
-                                             style="width: {{ lab_data.lab.get_student_percentage }}%;" 
-                                             aria-valuenow="{{ lab_data.lab.get_student_percentage }}" 
+                                             style="width: {{ lab_data.completion_percentage }}%;" 
+                                             aria-valuenow="{{ lab_data.completion_percentage }}" 
                                              aria-valuemin="0" 
                                              aria-valuemax="100">
                                             {{ lab_data.completion_percentage|floatformat:1 }}%

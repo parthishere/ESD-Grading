@@ -182,6 +182,7 @@ class Part(models.Model):
     order = models.PositiveIntegerField(default=0)
     is_required = models.BooleanField(default=True)
     has_challenges = models.BooleanField(default=False, help_text="Check if this part has challenge tasks")
+    due_date = models.DateTimeField(null=True, blank=True, help_text="Due date for this part's signoff")
     
     class Meta:
         ordering = ['lab', 'order']
@@ -311,6 +312,14 @@ class Part(models.Model):
             return signoff.status
         except Signoff.DoesNotExist:
             return "not_started"
+            
+    def is_signoff_late(self, signoff):
+        """Check if a signoff was submitted after the due date."""
+        if not self.due_date or not signoff:
+            return False
+        
+        # Compare signoff date with part due date
+        return signoff.date_updated > self.due_date
         
     def get_contribution_to_lab(self):
         """Calculate how many points this part contributes to the overall lab grade."""
@@ -436,11 +445,23 @@ class Student(models.Model):
         return (earned_points / total_points) * Decimal('100')
         
     def get_course_letter_grade(self):
-        """Get student's overall letter grade using the default grade scale."""
+        """Get student's overall letter grade using the appropriate grade scale."""
         percentage = self.get_overall_grade()
         
-        # Use default grade scale
-        grade_scale = GradeScale.get_default_scale()
+        # Try to use a lab's grade scale if available
+        labs = Lab.objects.all()
+        grade_scale = None
+        
+        if labs.exists():
+            for lab in labs:
+                if lab.grade_scale:
+                    grade_scale = lab.grade_scale
+                    break
+        
+        # Fall back to default if no lab has a grade scale
+        if not grade_scale:
+            grade_scale = GradeScale.get_default_scale()
+            
         return grade_scale.get_letter_grade(percentage)
 
 class Signoff(models.Model):

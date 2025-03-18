@@ -68,4 +68,5 @@ urlpatterns = [
     # CSV Exports
     path('export/lab/<int:lab_id>/csv/', views.export_lab_csv, name='export_lab_csv'),
     path('export/part/<int:part_id>/csv/', views.export_part_csv, name='export_part_csv'),
+    path('export/all/csv/', views.export_all_data_csv, name='export_all_data'),
 ]

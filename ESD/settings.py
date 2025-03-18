@@ -54,7 +54,7 @@ INSTALLED_APPS = [
     
     'labs',
     
-    'dj_rest_auth',
+    # 'dj_rest_auth',
 ]
 
 MIDDLEWARE = [
@@ -160,3 +160,6 @@ DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+USE_TZ = True
+TIME_ZONE = 'America/Boise'

@@ -95,7 +95,26 @@ def lab_detail(request, lab_id):
 def part_detail(request, part_id):
     """View details for a lab part."""
     part = get_object_or_404(Part, pk=part_id)
-    return render(request, 'labs/part_detail.html', {'part': part})
+    
+    # Get the quality criteria for this part
+    quality_criteria = part.quality_criteria.all()
+    
+    # Get all signoffs for this part
+    signoffs = Signoff.objects.filter(part=part).select_related('student', 'instructor').order_by('-date_updated')
+    
+    # Get challenges if part has them
+    challenges = []
+    if part.has_challenges:
+        challenges = part.challenges.all()
+    
+    context = {
+        'part': part,
+        'quality_criteria': quality_criteria,
+        'signoffs': signoffs,
+        'challenges': challenges
+    }
+    
+    return render(request, 'labs/part_detail.html', context)
 
 @login_required
 def student_list(request):
@@ -224,7 +243,73 @@ def student_toggle_active(request, student_id):
 def student_detail(request, student_id):
     """View details for a student."""
     student = get_object_or_404(Student, pk=student_id)
-    return render(request, 'labs/student_detail.html', {'student': student})
+    
+    # Get all labs
+    labs = Lab.objects.all().order_by('name')
+    
+    # Calculate completion statistics
+    total_parts = Part.objects.filter(is_required=True).count()
+    completed_parts = Signoff.objects.filter(
+        student=student, 
+        status='approved',
+        part__is_required=True
+    ).values('part').distinct().count()
+    
+    # Calculate points
+    earned_points = Decimal('0')
+    total_points = Decimal('0')
+    
+    for lab in labs:
+        lab_max = lab.get_max_score()
+        lab_earned = lab.get_student_score(student)
+        earned_points += lab_earned
+        total_points += lab_max
+    
+    # Get recent signoffs
+    recent_signoffs = Signoff.objects.filter(
+        student=student
+    ).order_by('-date_updated')[:5]
+    
+    # Categorize labs by completion status
+    completed_labs = []
+    in_progress_labs = []
+    not_started_labs = []
+    
+    for lab in labs:
+        parts = lab.parts.all()
+        total_parts_count = parts.count()
+        completed_parts_count = 0
+        has_any_started = False
+        
+        for part in parts:
+            status = part.get_part_status(student)
+            if status == 'approved':
+                completed_parts_count += 1
+            elif status in ['pending', 'rejected']:
+                has_any_started = True
+        
+        # Determine lab completion status
+        if total_parts_count > 0 and completed_parts_count == total_parts_count:
+            completed_labs.append(lab)
+        elif has_any_started or completed_parts_count > 0:
+            in_progress_labs.append(lab)
+        else:
+            not_started_labs.append(lab)
+    
+    context = {
+        'student': student,
+        'completed_parts_count': completed_parts,
+        'total_parts_count': total_parts,
+        'earned_points': earned_points,
+        'total_points': total_points,
+        'recent_signoffs': recent_signoffs,
+        'labs': labs,
+        'completed_labs': completed_labs,
+        'in_progress_labs': in_progress_labs,
+        'not_started_labs': not_started_labs
+    }
+    
+    return render(request, 'labs/student_detail.html', context)
 
 @login_required
 def user_list(request):
@@ -506,6 +591,11 @@ def quick_signoff_submit(request):
         except Part.DoesNotExist:
             print(f"Part with ID {part_id} not found")
             return JsonResponse({'success': False, 'error': f'Part with ID {part_id} not found'}, status=404)
+            
+        # Check if submission is late
+        is_late = False
+        if part.due_date and timezone.now() > part.due_date:
+            is_late = True
         
         # Check if part has quality criteria, create if not
         if not part.quality_criteria.exists():
@@ -528,6 +618,9 @@ def quick_signoff_submit(request):
             signoff.instructor = request.user
             signoff.status = 'approved'
             signoff.comments = comments
+            # Add info about lateness if applicable
+            if is_late:
+                signoff.comments += "\n[Late submission: submitted after due date]"
             signoff.save()
         
         # Save quality criteria scores
@@ -1296,33 +1389,71 @@ def quick_stats(request):
     else:
         challenge_completion = 0
     
-    # Set a mock value for exceeds requirements
-    exceeds_requirements = 42
+    # Count students who have status 'ER' in any evaluation
+    evaluation_sheets = EvaluationSheet.objects.all()
+    er_count = 0
     
-    # Get the grade distribution for the dashboard
+    for sheet in evaluation_sheets:
+        for status in sheet.evaluations.values():
+            if status == 'ER':  # ER = Exceeds Requirements
+                er_count += 1
+                break
+    
+    # Calculate grade distribution
     grade_distribution = {}
     # Initialize all grades to 0
     for grade in ['A+', 'A', 'A-', 'B+', 'B', 'B-', 'C+', 'C', 'C-', 'D+', 'D', 'D-', 'F']:
         grade_distribution[grade] = 0
     
-    # Collect grade data - assign some mock data for testing
-    # Set some random values for testing if data is correctly displayed
-    grade_distribution = {
-        'A+': 3, 'A': 5, 'A-': 7, 
-        'B+': 10, 'B': 12, 'B-': 8, 
-        'C+': 5, 'C': 4, 'C-': 3, 
-        'D+': 2, 'D': 1, 'D-': 1, 
-        'F': 0
+    # Get all labs
+    labs = Lab.objects.all()
+    # Use the first lab's grade scale, or fall back to the default
+    lab_grade_scale = None
+    if labs.exists():
+        first_lab = labs.first()
+        lab_grade_scale = first_lab.grade_scale
+    
+    # If no lab has a grade scale, use the default
+    if not lab_grade_scale:
+        lab_grade_scale = GradeScale.get_default_scale()
+    
+    # Calculate actual grade distribution using the proper grade scale
+    for student in students:
+        overall_grade = student.get_overall_grade()
+        letter_grade = lab_grade_scale.get_letter_grade(overall_grade)
+        grade_distribution[letter_grade] = grade_distribution.get(letter_grade, 0) + 1
+    
+    # Calculate challenge completion by student
+    challenge_completion_by_student = {
+        'not_attempted': 0,  # 0%
+        'low': 0,           # <50%
+        'medium': 0,        # 50-75%
+        'high': 0,          # 75-90%
+        'complete': 0       # >90%
     }
     
-    # Set some mock data for testing challenge completion
-    challenge_completion_by_student = {
-        'not_attempted': 15,  # 0%
-        'low': 8,             # <50%
-        'medium': 12,         # 50-75%
-        'high': 7,            # 75-90%
-        'complete': 3         # >90%
-    }
+    # Group students by challenge completion percentage
+    for student in students:
+        # Count total completed challenges for this student
+        student_completed = ChallengeScore.objects.filter(score__gt=0, signoff__student=student).count()
+        
+        if student_completed == 0:
+            challenge_completion_by_student['not_attempted'] += 1
+        else:
+            # Calculate percentage of all challenges completed
+            if total_challenges > 0:
+                completion_pct = (student_completed / total_challenges) * 100
+                
+                if completion_pct >= 90:
+                    challenge_completion_by_student['complete'] += 1
+                elif completion_pct >= 75:
+                    challenge_completion_by_student['high'] += 1
+                elif completion_pct >= 50:
+                    challenge_completion_by_student['medium'] += 1
+                else:
+                    challenge_completion_by_student['low'] += 1
+            else:
+                challenge_completion_by_student['not_attempted'] += 1
     
     return JsonResponse({
         'total_signoffs': total_signoffs,
@@ -1330,7 +1461,7 @@ def quick_stats(request):
         'total_challenges': total_challenges,
         'completed_challenges': completed_challenges,
         'challenge_completion': challenge_completion,
-        'exceeds_requirements': exceeds_requirements,
+        'exceeds_requirements': er_count,
         'grade_distribution': grade_distribution,
         'challenge_completion_by_student': challenge_completion_by_student
     })
@@ -1342,7 +1473,8 @@ def export_lab_csv(request, lab_id):
     students = Student.objects.filter(active=True).order_by('name')
     
     # Get grade scale info
-    grade_scale_name = lab.grade_scale.name if lab.grade_scale else "Default Grade Scale"
+    grade_scale = lab.grade_scale if lab.grade_scale else GradeScale.get_default_scale()
+    grade_scale_name = grade_scale.name
     
     # Create CSV response
     response = HttpResponse(content_type='text/csv')
@@ -1357,6 +1489,25 @@ def export_lab_csv(request, lab_id):
     writer.writerow(['Max Points (Calculated)', str(lab.get_max_score())])
     writer.writerow(['Total Points (Configured)', str(lab.total_points)])
     writer.writerow(['Grade Scale', grade_scale_name])
+    
+    # Add detailed grade scale information
+    writer.writerow([])  # Empty row as separator
+    writer.writerow(['Grade Scale Details', grade_scale.name])
+    writer.writerow(['Description', grade_scale.description])
+    writer.writerow(['Grade', 'Threshold (%)'])
+    writer.writerow(['A+', f">= {grade_scale.a_plus_threshold}"])
+    writer.writerow(['A', f">= {grade_scale.a_threshold}"])
+    writer.writerow(['A-', f">= {grade_scale.a_minus_threshold}"])
+    writer.writerow(['B+', f">= {grade_scale.b_plus_threshold}"])
+    writer.writerow(['B', f">= {grade_scale.b_threshold}"])
+    writer.writerow(['B-', f">= {grade_scale.b_minus_threshold}"])
+    writer.writerow(['C+', f">= {grade_scale.c_plus_threshold}"])
+    writer.writerow(['C', f">= {grade_scale.c_threshold}"])
+    writer.writerow(['C-', f">= {grade_scale.c_minus_threshold}"])
+    writer.writerow(['D+', f">= {grade_scale.d_plus_threshold}"])
+    writer.writerow(['D', f">= {grade_scale.d_threshold}"])
+    writer.writerow(['D-', f">= {grade_scale.d_minus_threshold}"])
+    writer.writerow(['F', f"< {grade_scale.d_minus_threshold}"])
     writer.writerow([])  # Empty row as separator
     
     # Get all parts for this lab
@@ -1368,7 +1519,7 @@ def export_lab_csv(request, lab_id):
         # Get quality criteria for each part
         quality_criteria = part.quality_criteria.all()
         for criteria in quality_criteria:
-            all_criteria.add(f"{part.name}_{criteria.name}")
+            all_criteria.add(f"{part.name}_Quality_{criteria.name}")
         
         # For each part, check if there are any evaluation sheets with rubrics
         signoffs = Signoff.objects.filter(part=part)
@@ -1377,14 +1528,17 @@ def export_lab_csv(request, lab_id):
             for sheet in eval_sheets:
                 if hasattr(sheet, 'rubric') and sheet.rubric:
                     for criterion_key, criterion in sheet.rubric.criteria_data.items():
-                        all_criteria.add(f"{part.name}_{criterion['name']}")
+                        all_criteria.add(f"{part.name}_Eval_{criterion['name']}")
     
     # Create header row
     header = ['Student ID', 'Student Name', 'Email', 'Batch']
     
-    # Add each part's status
+    # Add each part's status and late submission info
     for part in parts:
         header.append(f"{part.name} Status")
+        header.append(f"{part.name} Submission")
+        header.append(f"{part.name} Signoff Date")
+        header.append(f"{part.name} Days Late")
     
     # Add each criteria
     header.extend(sorted(all_criteria))
@@ -1394,7 +1548,7 @@ def export_lab_csv(request, lab_id):
     
     writer.writerow(header)
     
-    # Write data for each student
+    # Write data for each student (only active students)
     for student in students:
         row = [
             student.student_id,
@@ -1403,9 +1557,37 @@ def export_lab_csv(request, lab_id):
             student.batch.strftime('%Y-%m-%d')
         ]
         
-        # Add part status
+        # Add part status and late submission info
         for part in parts:
-            row.append(part.get_part_status(student))
+            status = part.get_part_status(student)
+            row.append(status)
+            
+            # Check if submission was late
+            submission_info = "N/A"
+            signoff_date = "N/A"
+            days_late = "N/A"
+            
+            if status != "not_started":
+                try:
+                    signoff = Signoff.objects.get(student=student, part=part)
+                    signoff_date = signoff.date_updated.strftime('%Y-%m-%d %H:%M')
+                    
+                    if part.due_date and signoff.date_updated > part.due_date:
+                        submission_info = "Late"
+                        # Calculate days late
+                        delta = signoff.date_updated - part.due_date
+                        days_late = str(delta.days)
+                        if delta.seconds > 0 and delta.days == 0:
+                            days_late = "<1"  # Less than a day late
+                    else:
+                        submission_info = "On Time" if part.due_date else "No Due Date"
+                        days_late = "0" if part.due_date else "N/A"
+                except Signoff.DoesNotExist:
+                    pass
+            
+            row.append(submission_info)
+            row.append(signoff_date)
+            row.append(days_late)
         
         # Add criteria scores
         criteria_dict = {}
@@ -1417,7 +1599,7 @@ def export_lab_csv(request, lab_id):
                 # Add quality criteria scores
                 quality_scores = signoff.quality_scores.all()
                 for score in quality_scores:
-                    criteria_key = f"{part.name}_{score.criteria.name}"
+                    criteria_key = f"{part.name}_Quality_{score.criteria.name}"
                     criteria_dict[criteria_key] = f"{score.score}/{score.criteria.max_points}"
                 
                 # Add evaluation rubric scores if available
@@ -1426,7 +1608,7 @@ def export_lab_csv(request, lab_id):
                     if eval_sheet and hasattr(eval_sheet, 'rubric') and eval_sheet.rubric:
                         for criterion_key, criterion in eval_sheet.rubric.criteria_data.items():
                             criteria_name = criterion['name']
-                            key = f"{part.name}_{criteria_name}"
+                            key = f"{part.name}_Eval_{criteria_name}"
                             earned = eval_sheet.get_criterion_earned_marks(criterion_key)
                             max_marks = Decimal(str(criterion['max_marks']))
                             criteria_dict[key] = f"{earned}/{max_marks}"
@@ -1482,6 +1664,7 @@ def export_lab_csv(request, lab_id):
 def export_part_csv(request, part_id):
     """Export all student data for a specific part as CSV with linearized criteria columns."""
     part = get_object_or_404(Part, pk=part_id)
+    # Only get active students
     students = Student.objects.filter(active=True).order_by('name')
     
     # Create CSV response
@@ -1489,6 +1672,16 @@ def export_part_csv(request, part_id):
     response['Content-Disposition'] = f'attachment; filename="{part.name}_grades.csv"'
     
     writer = csv.writer(response)
+    
+    # Write part metadata
+    writer.writerow(['Part', part.name])
+    writer.writerow(['Lab', part.lab.name])
+    writer.writerow(['Description', part.description])
+    if part.due_date:
+        writer.writerow(['Due Date', part.due_date.strftime('%Y-%m-%d %H:%M')])
+    else:
+        writer.writerow(['Due Date', 'Not set'])
+    writer.writerow([])  # Empty row as separator
     
     # Get quality criteria for this part
     quality_criteria = part.quality_criteria.all()
@@ -1504,7 +1697,7 @@ def export_part_csv(request, part_id):
                     rubric_criteria.add(criterion['name'])
     
     # Create header row
-    header = ['Student ID', 'Student Name', 'Email', 'Batch', 'Status']
+    header = ['Student ID', 'Student Name', 'Email', 'Batch', 'Status', 'Submission', 'Signoff Date', 'Days Late']
     
     # Add quality criteria columns
     for criteria in quality_criteria:
@@ -1515,18 +1708,46 @@ def export_part_csv(request, part_id):
         header.append(f"Rubric: {criteria_name}")
     
     # Add total scores
-    header.extend(['Quality Total', 'Percentage'])
+    header.extend(['Quality Total', 'Evaluation Total', 'Combined Total', 'Percentage'])
     
     writer.writerow(header)
     
     # Write data for each student
     for student in students:
+        status = part.get_part_status(student)
+        
+        # Check if submission was late
+        submission_info = "N/A"
+        signoff_date = "N/A"
+        days_late = "N/A"
+        
+        if status != "not_started":
+            try:
+                signoff = Signoff.objects.get(student=student, part=part)
+                signoff_date = signoff.date_updated.strftime('%Y-%m-%d %H:%M')
+                
+                if part.due_date and signoff.date_updated > part.due_date:
+                    submission_info = "Late"
+                    # Calculate days late
+                    delta = signoff.date_updated - part.due_date
+                    days_late = str(delta.days)
+                    if delta.seconds > 0 and delta.days == 0:
+                        days_late = "<1"  # Less than a day late
+                else:
+                    submission_info = "On Time" if part.due_date else "No Due Date"
+                    days_late = "0" if part.due_date else "N/A"
+            except Signoff.DoesNotExist:
+                pass
+        
         row = [
             student.student_id,
             student.name,
             student.email,
             student.batch.strftime('%Y-%m-%d'),
-            part.get_part_status(student)
+            status,
+            submission_info,
+            signoff_date,
+            days_late
         ]
         
         # Initialize scores dictionaries
@@ -1562,15 +1783,42 @@ def export_part_csv(request, part_id):
             for criteria_name in sorted(rubric_criteria):
                 row.append(rubric_scores_dict.get(criteria_name, "N/A"))
             
-            # Add total scores
+            # Calculate total scores
             max_score = part.get_max_score()
             student_score = part.get_student_score(student)
+            
+            # Calculate quality criteria total
+            quality_total = Decimal('0')
+            quality_max = Decimal('0')
+            for criteria in quality_criteria:
+                try:
+                    score = QualityScore.objects.get(signoff=signoff, criteria=criteria)
+                    quality_total += Decimal(str(score.score))
+                except QualityScore.DoesNotExist:
+                    pass
+                quality_max += Decimal(str(criteria.max_points))
+            
+            # Calculate evaluation total
+            eval_total = Decimal('0')
+            eval_max = Decimal('0')
+            try:
+                eval_sheet = signoff.evaluation_sheet.first()
+                if eval_sheet and hasattr(eval_sheet, 'rubric') and eval_sheet.rubric:
+                    eval_total = eval_sheet.get_earned_marks()
+                    for _, criterion in eval_sheet.rubric.criteria_data.items():
+                        eval_max += Decimal(str(criterion['max_marks']))
+            except:
+                pass
+                
+            # Add totals to row
+            row.append(f"{quality_total}/{quality_max}")
+            row.append(f"{eval_total}/{eval_max}")
             row.append(f"{student_score}/{max_score}")
             row.append(f"{part.get_student_percentage(student):.2f}%")
             
         except Signoff.DoesNotExist:
             # If no signoff exists, add N/A for all criteria
-            for _ in range(len(quality_criteria) + len(rubric_criteria) + 2):
+            for _ in range(len(quality_criteria) + len(rubric_criteria) + 4):  # +4 for the four total columns
                 row.append("N/A")
         
         writer.writerow(row)
@@ -1600,6 +1848,46 @@ def export_student_grade_csv(request, student_id=None):
     response['Content-Disposition'] = f'attachment; filename="{filename}"'
     
     writer = csv.writer(response)
+    
+    # Write metadata header
+    writer.writerow(['Student Grade Report'])
+    writer.writerow(['Generated on', timezone.now().strftime('%Y-%m-%d %H:%M')])
+    writer.writerow(['Total Students', str(students.count())])
+    writer.writerow(['Total Labs', str(labs.count())])
+    
+    # Get appropriate grade scale
+    # Use the first lab's grade scale if available
+    grade_scale = None
+    if labs.exists():
+        for lab in labs:
+            if lab.grade_scale:
+                grade_scale = lab.grade_scale
+                break
+    
+    # If no lab has a grade scale, use the default
+    if not grade_scale:
+        grade_scale = GradeScale.get_default_scale()
+    
+    # Add grading scale information
+    writer.writerow([])  # Empty row as separator
+    writer.writerow(['Grading Scale Information'])
+    writer.writerow(['Scale Name', grade_scale.name])
+    writer.writerow(['Scale Description', grade_scale.description])
+    writer.writerow(['Grade', 'Threshold (%)'])
+    writer.writerow(['A+', f">= {grade_scale.a_plus_threshold}"])
+    writer.writerow(['A', f">= {grade_scale.a_threshold}"])
+    writer.writerow(['A-', f">= {grade_scale.a_minus_threshold}"])
+    writer.writerow(['B+', f">= {grade_scale.b_plus_threshold}"])
+    writer.writerow(['B', f">= {grade_scale.b_threshold}"])
+    writer.writerow(['B-', f">= {grade_scale.b_minus_threshold}"])
+    writer.writerow(['C+', f">= {grade_scale.c_plus_threshold}"])
+    writer.writerow(['C', f">= {grade_scale.c_threshold}"])
+    writer.writerow(['C-', f">= {grade_scale.c_minus_threshold}"])
+    writer.writerow(['D+', f">= {grade_scale.d_plus_threshold}"])
+    writer.writerow(['D', f">= {grade_scale.d_threshold}"])
+    writer.writerow(['D-', f">= {grade_scale.d_minus_threshold}"])
+    writer.writerow(['F', f"< {grade_scale.d_minus_threshold}"])
+    writer.writerow([])  # Empty row as separator
     
     # Build a comprehensive list of all criteria across all parts
     all_quality_criteria = []
@@ -1645,13 +1933,17 @@ def export_student_grade_csv(request, student_id=None):
     # Add lab and part status columns
     for lab in labs:
         parts = lab_parts[lab.id]
-        # Include grade scale information
-        grade_scale_name = lab.grade_scale.name if lab.grade_scale else "Default"
+        # Get the lab's rubric info rather than hardcoded "grades range"
+        grade_scale = lab.grade_scale if lab.grade_scale else GradeScale.get_default_scale()
+        grade_scale_name = grade_scale.name
         header.append(f"{lab.name} - Grade ({grade_scale_name})")
         header.append(f"{lab.name} - Percentage")
         
         for part in parts:
             header.append(f"{lab.name} - {part.name} - Status")
+            header.append(f"{lab.name} - {part.name} - Submission")
+            header.append(f"{lab.name} - {part.name} - Signoff Date")
+            header.append(f"{lab.name} - {part.name} - Days Late")
     
     # Add quality criteria columns
     for lab_name, part_name, criteria_name, _ in all_quality_criteria:
@@ -1666,10 +1958,9 @@ def export_student_grade_csv(request, student_id=None):
         header.append(f"{lab_name} - {part_name} - Rubric: {criteria_name}")
     
     # Add overall score
-    default_scale = GradeScale.get_default_scale()
     header.append('Overall Score')
     header.append('Overall Percentage')
-    header.append(f'Overall Grade ({default_scale.name})')
+    header.append(f'Overall Grade (with scale)')
     
     writer.writerow(header)
     
@@ -1681,6 +1972,13 @@ def export_student_grade_csv(request, student_id=None):
             student.email,
             student.batch.strftime('%Y-%m-%d')
         ]
+        
+        # Calculate student's overall points
+        earned_points = Decimal('0')
+        total_points = Decimal('0')        
+        for lab in labs:
+            earned_points += lab.get_student_score(student)
+            total_points += lab.get_max_score()
         
         # Collect all scores in dictionaries
         lab_data = {}
@@ -1763,10 +2061,37 @@ def export_student_grade_csv(request, student_id=None):
             row.append(lab_grade_data['grade'])
             row.append(f"{lab_grade_data['percentage']:.2f}%")
             
-            # Add part status
+            # Add part status and submission info
             for part in parts:
                 status = part_status.get((lab.id, part.id), 'not_started')
                 row.append(status)
+                
+                # Add submission info, signoff date, and days late
+                submission_info = "N/A"
+                signoff_date = "N/A"
+                days_late = "N/A"
+                
+                if status != "not_started":
+                    try:
+                        signoff = Signoff.objects.get(student=student, part=part)
+                        signoff_date = signoff.date_updated.strftime('%Y-%m-%d %H:%M')
+                        
+                        if part.due_date and signoff.date_updated > part.due_date:
+                            submission_info = "Late"
+                            # Calculate days late
+                            delta = signoff.date_updated - part.due_date
+                            days_late = str(delta.days)
+                            if delta.seconds > 0 and delta.days == 0:
+                                days_late = "<1"  # Less than a day late
+                        else:
+                            submission_info = "On Time" if part.due_date else "No Due Date"
+                            days_late = "0" if part.due_date else "N/A"
+                    except Signoff.DoesNotExist:
+                        pass
+                
+                row.append(submission_info)
+                row.append(signoff_date)
+                row.append(days_late)
         
         # Add quality criteria scores
         for lab_name, part_name, criteria_name, criteria_id in all_quality_criteria:
@@ -1827,10 +2152,202 @@ def export_student_grade_csv(request, student_id=None):
         
         # Add overall scores calculated from student model
         overall_grade = student.get_overall_grade()
-        row.append(f"{student_data['earned_points']}/{student_data['total_points']}")  # Raw points
-        row.append(f"{overall_grade:.2f}%")  # Percentage
-        row.append(student.get_course_letter_grade())  # Letter grade
+        letter_grade = student.get_course_letter_grade()  # This now uses the lab's grade scale
+        
+        # Note in the CSV which grade scale was used
+        row.append(f"{earned_points}/{total_points}")  # Raw points
+        row.append(f"{overall_grade:.2f}%")  # Percentage 
+        row.append(f"{letter_grade} (Using {grade_scale.name})")  # Letter grade with scale info
         
         writer.writerow(row)
+    
+    return response
+
+@login_required
+def export_all_data_csv(request):
+    """Export all student data for all labs and all parts as a comprehensive CSV report."""
+    # Only get active students
+    students = Student.objects.filter(active=True).order_by("name")
+    
+    # Get all labs and parts
+    labs = Lab.objects.all().order_by("name")
+    
+    # Create CSV response
+    response = HttpResponse(content_type="text/csv")
+    response["Content-Disposition"] = f"attachment; filename=\"complete_lab_report.csv\""
+    
+    writer = csv.writer(response)
+    
+    # Write metadata header rows
+    writer.writerow(["Complete Lab Report"])
+    writer.writerow(["Generated on", timezone.now().strftime("%Y-%m-%d %H:%M")])
+    writer.writerow(["Total Students", str(students.count())])
+    writer.writerow(["Total Labs", str(labs.count())])
+    writer.writerow([])  # Empty row as separator
+    
+    # Build a comprehensive list of parts and rubrics
+    all_parts = []
+    for lab in labs:
+        parts = lab.parts.all().order_by("order")
+        for part in parts:
+            all_parts.append((lab.id, lab.name, part.id, part.name, part.due_date))
+    
+    # Get appropriate grade scale
+    # Use the first lab's grade scale if available
+    grade_scale = None
+    if labs.exists():
+        for lab in labs:
+            if lab.grade_scale:
+                grade_scale = lab.grade_scale
+                break
+    
+    # If no lab has a grade scale, use the default
+    if not grade_scale:
+        grade_scale = GradeScale.get_default_scale()
+    
+    # Create header row
+    header = ["Student ID", "Student Name", "Email", "Batch", "Status"]
+    
+    # Add overall grade columns
+    header.append(f"Overall Grade (out of 100%)")
+    header.append(f"Letter Grade ({grade_scale.name})")
+    
+    # Add lab grade columns
+    for lab in labs:
+        # Get this lab"s grade scale
+        lab_grade_scale = lab.grade_scale.name if lab.grade_scale else grade_scale.name
+        header.append(f"{lab.name} - Grade (%)") 
+        header.append(f"{lab.name} - Letter ({lab_grade_scale})")
+    
+    # Add part status columns
+    for lab_id, lab_name, part_id, part_name, due_date in all_parts:
+        header.append(f"{lab_name} - {part_name} - Status")
+        header.append(f"{lab_name} - {part_name} - Submission")
+        header.append(f"{lab_name} - {part_name} - Signoff Date")
+        header.append(f"{lab_name} - {part_name} - Days Late")
+        header.append(f"{lab_name} - {part_name} - Quality Score")
+        header.append(f"{lab_name} - {part_name} - Evaluation Score")
+        header.append(f"{lab_name} - {part_name} - Total Score")
+    
+    writer.writerow(header)
+    
+    # Write data for each student
+    for student in students:
+        row = [
+            student.student_id,
+            student.name,
+            student.email,
+            student.batch.strftime("%Y-%m-%d"),
+            "Active" if student.active else "Inactive"
+        ]
+        
+        # Add overall grade
+        overall_grade = student.get_overall_grade()
+        row.append(f"{overall_grade:.2f}%")
+        row.append(student.get_course_letter_grade())
+        
+        # Add lab grades
+        for lab in labs:
+            percentage = lab.get_student_percentage(student)
+            letter = lab.get_grade_letter(student)
+            row.append(f"{percentage:.2f}%")
+            row.append(letter)
+        
+        # Add part statuses and scores
+        for lab_id, lab_name, part_id, part_name, due_date in all_parts:
+            part = Part.objects.get(pk=part_id)
+            status = part.get_part_status(student)
+            score = "-"
+            
+            # Check if submission was late
+            submission_info = "N/A"
+            signoff_date = "N/A"
+            days_late = "N/A"
+            
+            if status != "not_started":
+                try:
+                    signoff = Signoff.objects.get(student=student, part=part)
+                    signoff_date = signoff.date_updated.strftime("%Y-%m-%d %H:%M")
+                    
+                    if due_date and signoff.date_updated > due_date:
+                        submission_info = "Late"
+                        # Calculate days late
+                        delta = signoff.date_updated - due_date
+                        days_late = str(delta.days)
+                        if delta.seconds > 0 and delta.days == 0:
+                            days_late = "<1"  # Less than a day late
+                    else:
+                        submission_info = "On Time" if due_date else "No Due Date"
+                        days_late = "0" if due_date else "N/A"
+                        
+                    # Calculate quality criteria total
+                    quality_total = Decimal('0')
+                    quality_max = Decimal('0')
+                    for criteria in part.quality_criteria.all():
+                        quality_max += Decimal(str(criteria.max_points))
+                        try:
+                            score = QualityScore.objects.get(signoff=signoff, criteria=criteria)
+                            quality_total += Decimal(str(score.score))
+                        except QualityScore.DoesNotExist:
+                            pass
+                            
+                    # Calculate evaluation total
+                    eval_total = Decimal('0')
+                    eval_max = Decimal('0')
+                    try:
+                        eval_sheet = signoff.evaluation_sheet.first()
+                        if eval_sheet and hasattr(eval_sheet, 'rubric') and eval_sheet.rubric:
+                            eval_total = eval_sheet.get_earned_marks()
+                            for _, criterion in eval_sheet.rubric.criteria_data.items():
+                                eval_max += Decimal(str(criterion['max_marks']))
+                    except:
+                        pass
+                    
+                    quality_score = f"{quality_total}/{quality_max}"
+                    eval_score = f"{eval_total}/{eval_max}"
+                    
+                    if status == "approved":
+                        score = f"{part.get_student_score(student)} / {part.get_max_score()}"
+                    else:
+                        score = "-"
+                except Signoff.DoesNotExist:
+                    quality_score = "N/A"
+                    eval_score = "N/A"
+                    score = "Error: Approved but no signoff" if status == "approved" else "-"
+            else:
+                quality_score = "N/A"
+                eval_score = "N/A"
+            
+            row.append(status)
+            row.append(submission_info)
+            row.append(signoff_date)
+            row.append(days_late)
+            row.append(quality_score)
+            row.append(eval_score)
+            row.append(score)
+        
+        writer.writerow(row)
+    
+    # Add a separator row
+    writer.writerow([])
+    
+    # Add grading scale information
+    writer.writerow(["Grading Scale Information"])
+    writer.writerow(["Scale Name", grade_scale.name])
+    writer.writerow(["Description", grade_scale.description])
+    writer.writerow(["Grade", "Threshold (%)"])
+    writer.writerow(["A+", f">= {grade_scale.a_plus_threshold}"])
+    writer.writerow(["A", f">= {grade_scale.a_threshold}"])
+    writer.writerow(["A-", f">= {grade_scale.a_minus_threshold}"])
+    writer.writerow(["B+", f">= {grade_scale.b_plus_threshold}"])
+    writer.writerow(["B", f">= {grade_scale.b_threshold}"])
+    writer.writerow(["B-", f">= {grade_scale.b_minus_threshold}"])
+    writer.writerow(["C+", f">= {grade_scale.c_plus_threshold}"])
+    writer.writerow(["C", f">= {grade_scale.c_threshold}"])
+    writer.writerow(["C-", f">= {grade_scale.c_minus_threshold}"])
+    writer.writerow(["D+", f">= {grade_scale.d_plus_threshold}"])
+    writer.writerow(["D", f">= {grade_scale.d_threshold}"])
+    writer.writerow(["D-", f">= {grade_scale.d_minus_threshold}"])
+    writer.writerow(["F", f"< {grade_scale.d_minus_threshold}"])
     
     return response
